@@ -29,7 +29,7 @@ class NeuromotorModel:
 
     def train(self) -> bool:
         """Trains the IsolationForest on accumulated data."""
-        if len(self._training_data) < 10:
+        if len(self._training_data) < 3:
             logger.warning("Not enough training data to build a reliable model.")
             return False
 
