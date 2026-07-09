@@ -13,6 +13,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
+import subprocess
+import tempfile
+import shutil
+from pathlib import Path
 
 load_dotenv()
 
@@ -24,6 +28,7 @@ class ChatRequest(BaseModel):
     message: str | None = None
     emotion_state: str | None = None
     editor_code: str | None = None
+    repo_url: str | None = None
 
 
 
@@ -37,12 +42,33 @@ async def chat(request: ChatRequest):
     async def generate():
         try:
             from brain.callosum import corpus_callosum
+            
+            # If repo_url is provided, clone and ingest it
+            repo_code = ""
+            if request.repo_url:
+                try:
+                    with tempfile.TemporaryDirectory() as tmpdir:
+                        subprocess.run(["git", "clone", "--depth", "1", request.repo_url, tmpdir], check=True, capture_output=True)
+                        for ext in [".py", ".ts", ".tsx", ".js", ".jsx"]:
+                            for p in Path(tmpdir).rglob(f"*{ext}"):
+                                if "node_modules" in str(p) or "dist" in str(p) or "build" in str(p):
+                                    continue
+                                try:
+                                    repo_code += f"--- {p.name} ---\n{p.read_text()}\n\n"
+                                except:
+                                    pass
+                        # truncate to 30k chars so we don't blow context
+                        repo_code = repo_code[:30000]
+                except Exception as e:
+                    repo_code = f"Error cloning repo: {e}"
 
             initial_state = {
                 "user_input":         request.message or "",
                 "emotion_state":      request.emotion_state,
                 "editor_code":        request.editor_code,
+                "repo_code":          repo_code,
                 "messages":           [],
+
 
                 "context":            [],
                 "is_urgent":          False,
@@ -80,22 +106,21 @@ async def chat(request: ChatRequest):
 
                     elif "frontal_lobe" in event:
                         node_data = event["frontal_lobe"]
-                        # We pass the final synthesized response to the frontend
+                        frontal_resp = node_data.get("frontal_lobe_response", "")
+                        final_response = frontal_resp
                         yield f'data: {{"node": "frontal_lobe", "data": {{}}}}\n\n'
-                        yield f'data: {{"node": "end", "response": {json.dumps(node_data.get("frontal_lobe_response", ""))}}}\n\n'
+                        yield f'data: {{"node": "end", "response": {json.dumps(frontal_resp)}}}\n\n'
                     else:
                         # Catch the parallel nodes
                         for node_name in ["syntax", "logic", "security"]:
                             if node_name in event:
                                 yield f'data: {{"node": "{node_name}", "data": {{}}}}\n\n'
 
-                        # Capture final response
-                        if node_updates.get("final_response"):
-                            final_response = node_updates["final_response"]
-
                     yield f"data: {json.dumps(meta)}\n\n"
 
-            yield f"data: {json.dumps({'node': 'end', 'response': final_response or 'Processing complete.'})}\n\n"
+            if not final_response:
+                yield f"data: {json.dumps({'node': 'end', 'response': 'Processing complete.'})}\n\n"
+
 
         except Exception as exc:
             print(f"[Error] {exc}")

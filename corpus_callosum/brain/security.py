@@ -10,7 +10,14 @@ from brain.state import AgentState
 def security_node(state: AgentState) -> dict:
     llm = ChatOpenAI(model="openai/gpt-oss-120b", temperature=0, base_url="https://api.groq.com/openai/v1", api_key=os.getenv("GROQ_API_KEY"))
     
-    sys_prompt = "You are the Security Node. Focus ONLY on identifying exploits, input validation failures, injection risks, and vulnerabilities. Ignore general logic and syntax. Provide your security recommendations concisely."
+    sys_prompt = f"""You are the Security Node. Focus ONLY on identifying exploits, input validation failures, injection risks, and vulnerabilities. Ignore general logic and syntax. Provide your security recommendations concisely.
+
+[CURRENT REPOSITORY CODE]:
+{state.get("repo_code", "None")}
+
+Analyze the user's prompt and the provided repository code (if any) purely for SECURITY vulnerabilities.
+Hunt for injection flaws, unescaped inputs, exposed secrets, or logic bugs that could be exploited.
+"""
     
     response = llm.invoke([
         SystemMessage(content=sys_prompt),

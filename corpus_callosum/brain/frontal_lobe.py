@@ -28,12 +28,15 @@ You receive parallel processed inputs from your Hidden Layers. Your job is to sy
 [SECURITY NODE (Insular Lobe) OUTPUT]:
 {state.get("security_out")}
 
-[CURRENT EDITOR CODE]:
-{state.get("editor_code", "None")}
+[CURRENT REPOSITORY CODE]:
+{state.get("repo_code", "None")}
 
-Synthesize the above into the final output. If the user is frustrated, offer a helpful debug or fix.
-IMPORTANT: Any code you write MUST be placed inside triple backticks (```python ... ```). 
-The frontend parses these blocks directly into the user's Scratchpad.
+Synthesize the above into the final output. If the user provided a GitHub repository URL, you MUST output a comprehensive Markdown CODE REVIEW REPORT.
+The Code Review Report should include 3 sections based on your Hidden Layers:
+1. Syntax & Style Audit
+2. Logic & Performance Audit
+3. Security Audit
+Use GitHub Flavored Markdown.
 """
     
     response = llm.invoke([

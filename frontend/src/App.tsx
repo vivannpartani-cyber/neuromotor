@@ -1,23 +1,16 @@
 import React, { useState, useRef, useEffect, Suspense, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Camera, Play, Code2, AlertTriangle } from 'lucide-react';
+import { Send, Camera, Shield, Zap, AlertTriangle, GitBranch, Play } from 'lucide-react';
 import Webcam from 'react-webcam';
 import * as faceapi from '@vladmandic/face-api';
 import { Canvas } from '@react-three/fiber';
-import _Editor from 'react-simple-code-editor';
-import Prism from 'prismjs';
-import 'prismjs/components/prism-python';
-import 'prismjs/themes/prism-tomorrow.css';
+import ReactMarkdown from 'react-markdown';
 import Brain3D from './Brain3D';
-
-// Fallback for Vite CommonJS interop
-const Editor = (_Editor as any).default || _Editor;
 
 // ─────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────
 interface Message {
-
   id: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
@@ -30,7 +23,7 @@ interface Message {
 export default function App() {
   const [messages, setMessages] = useState<Message[]>([{
     id: '0', role: 'assistant', timestamp: new Date(),
-    content: `Neuromotor V6: Biometric IDE.\n\nThe Amygdala is watching your face. If you get stuck and look frustrated for >3s, it will autonomously debug your code in the Scratchpad.`,
+    content: `Neuromotor V8: Biometric Code Review Swarm.\n\nEnter a GitHub URL. The 3 parallel lobes will clone the repo and audit it simultaneously for syntax, logic, and security vulnerabilities.`,
   }]);
   
   const [input, setInput] = useState('');
@@ -38,9 +31,9 @@ export default function App() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [statusText, setStatusText]  = useState('SYSTEM READY');
   
-  // Scratchpad State
-  const [editorCode, setEditorCode] = useState('def calculate_fibonacci(n):\n    # I am stuck here. \n    # How do I make this faster?\n    if n <= 1:\n        return n\n    return calculate_fibonacci(n-1) + calculate_fibonacci(n-2)\n');
-  const [terminalOutput, setTerminalOutput] = useState('');
+  // Swarm State
+  const [repoUrl, setRepoUrl] = useState('https://github.com/torvalds/linux');
+  const [reviewReport, setReviewReport] = useState('> Swarm is standing by. Enter a repository URL and initiate the audit.');
 
   // Biometric State
   const webcamRef = useRef<Webcam>(null);
@@ -87,7 +80,7 @@ export default function App() {
         if (maxEmotion === 'angry' || maxEmotion === 'sad') {
           if (emotionStreak.current.emotion !== maxEmotion) {
             emotionStreak.current = { emotion: maxEmotion, startTime: now };
-          } else if (now - emotionStreak.current.startTime > 3000 && !isStreaming) {
+          } else if (now - emotionStreak.current.startTime > 4000 && !isStreaming && repoUrl) {
             // Trigger autonomous debug
             emotionStreak.current = { emotion: 'neutral', startTime: now };
             triggerAutonomousDebug();
@@ -98,15 +91,15 @@ export default function App() {
       }
     }
     setTimeout(detectEmotion, 500);
-  }, [modelsLoaded, isStreaming, editorCode]);
+  }, [modelsLoaded, isStreaming, repoUrl]);
 
   useEffect(() => { if (modelsLoaded) detectEmotion(); }, [modelsLoaded, detectEmotion]);
 
   const triggerAutonomousDebug = () => {
     setAutonomousTriggered(true);
     setTimeout(() => setAutonomousTriggered(false), 3000);
-    const msg = "I'm stuck. I'm visibly frustrated with this code. Please help me debug it and rewrite it perfectly.";
-    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'system', content: '⚡ AUTONOMOUS DEBUG TRIGGERED: Frustration detected.', timestamp: new Date() }]);
+    const msg = "I'm extremely frustrated with this codebase. Trigger an emergency full swarm audit on the repo to find out what's wrong.";
+    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'system', content: '⚡ AUTONOMOUS TRIGGER: User frustration detected. Emergency repo audit initiated.', timestamp: new Date() }]);
     sendToBackend(null, msg, true);
   };
 
@@ -122,12 +115,13 @@ export default function App() {
     setIsStreaming(true); 
     setActiveNodes(new Set(['amygdala'])); 
     setStatusText('INPUT LAYER (AMYGDALA) ANALYZING...');
+    setReviewReport('> Cloning repository and analyzing code... This may take a minute.');
 
     try {
       const res = await fetch('http://localhost:8000/chat', { 
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ message: query, emotion_state: emotion, editor_code: editorCode }) 
+        body: JSON.stringify({ message: query, emotion_state: emotion, repo_url: repoUrl }) 
       });
       
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -158,37 +152,27 @@ export default function App() {
               setActiveNodes(new Set(currentActive));
               
               if (['syntax', 'logic', 'security'].includes(event.node)) {
-                setStatusText('HIDDEN LAYER: PARALLEL PROCESSING...');
+                setStatusText('SWARM ACTIVE: PARALLEL AUDIT...');
               } else if (event.node === 'frontal_lobe') {
                 currentActive.clear(); 
                 currentActive.add('frontal_lobe');
                 setActiveNodes(new Set(currentActive));
-                setStatusText('OUTPUT LAYER: SYNTHESIZING...');
+                setStatusText('OUTPUT LAYER: SYNTHESIZING REPORT...');
               }
             }
           } catch { /* skip */ }
         }
       }
 
-      // Parse code block and inject to scratchpad
-      const codeMatch = finalResp.match(/```[a-z]*\n([\s\S]*?)```/);
-      if (codeMatch && codeMatch[1]) {
-        setEditorCode(codeMatch[1].trim());
-      }
-      
-      // Remove code block from final resp to avoid cluttering chat
-      const cleanResp = finalResp.replace(/```[a-z]*\n[\s\S]*?```/g, '\n*[Code injected into Scratchpad]*\n');
-      setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', content: cleanResp || 'No response generated.', timestamp: new Date() }]);
+      setReviewReport(finalResp || 'Error: No report generated.');
+      setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', content: 'Swarm Review Complete. Check the command center panel.', timestamp: new Date() }]);
     } catch (err: any) {
       setActiveNodes(new Set()); setStatusText('SYSTEM ERROR');
+      setReviewReport(`> Error: ${err.message}`);
       setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', timestamp: new Date(), content: `⚠️ ${err.message}` }]);
     } finally {
       setIsStreaming(false);
     }
-  };
-
-  const handleExecute = () => {
-    setTerminalOutput('> Running script...\n\nProcess finished with exit code 0.\nTime complexity O(N). Output valid.');
   };
 
   return (
@@ -211,7 +195,7 @@ export default function App() {
             <Webcam ref={webcamRef} muted={true} videoConstraints={{ facingMode: "user" }} style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: autonomousTriggered ? 0.3 : 0.7 }} />
             {autonomousTriggered && (
               <div className="absolute inset-0 flex items-center justify-center bg-orange-500/20">
-                <span className="text-orange-500 font-bold tracking-widest text-xs flex items-center gap-1"><AlertTriangle size={14}/> AUTONOMOUS DEBUG</span>
+                <span className="text-orange-500 font-bold tracking-widest text-xs flex items-center gap-1"><AlertTriangle size={14}/> AUTONOMOUS AUDIT</span>
               </div>
             )}
             <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.25)_50%)] bg-[length:100%_4px] pointer-events-none" />
@@ -251,12 +235,12 @@ export default function App() {
       {/* ── Center Pane: 3D Brain (40%) ── */}
       <div className="w-[40%] flex flex-col relative z-10 border-r border-slate-800/50">
         <div className="absolute top-0 left-0 right-0 p-4 z-20 flex justify-between pointer-events-none">
-          <h1 className="text-xl font-extrabold tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">NEUROMOTOR</h1>
+          <h1 className="text-xl font-extrabold tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400 drop-shadow-[0_0_15px_rgba(99,102,241,0.5)]">NEUROMOTOR</h1>
         </div>
         
         <div className="flex-1 bg-black/40">
           <Suspense fallback={<div className="h-full flex items-center justify-center text-xs text-slate-500 tracking-widest">BOOTING NEURAL ENGINE...</div>}>
-            <Canvas camera={{ position: [0, 0, 6], fov: 45 }}>
+            <Canvas camera={{ position: [0, 0, 5], fov: 45 }}>
               <Brain3D activeNodes={activeNodes} />
             </Canvas>
           </Suspense>
@@ -268,44 +252,37 @@ export default function App() {
           <div className="flex-1" />
           <div className="flex gap-1">
             {['syntax', 'logic', 'security'].map(n => (
-              <div key={n} className={`w-2 h-2 rounded-full transition-all duration-300 ${activeNodes.has(n) ? 'bg-indigo-500 shadow-[0_0_10px_#6366f1]' : 'bg-slate-800'}`} />
+              <div key={n} className={`w-2 h-2 rounded-full transition-all duration-300 ${activeNodes.has(n) ? 'bg-indigo-500 shadow-[0_0_15px_#6366f1]' : 'bg-slate-800'}`} />
             ))}
           </div>
         </div>
       </div>
 
-      {/* ── Right Pane: IDE Scratchpad & Execution (35%) ── */}
+      {/* ── Right Pane: Swarm Command Center (35%) ── */}
       <div className="w-[35%] flex flex-col relative z-20 bg-[#0f172a] opacity-95">
         
-        <div className="h-12 border-b border-slate-800/50 bg-slate-900/80 backdrop-blur-md flex items-center px-4 justify-between shrink-0">
-          <div className="flex items-center gap-2">
-            <Code2 size={14} className="text-indigo-400" />
-            <span className="text-[10px] font-bold text-slate-400 tracking-widest">SCRATCHPAD.PY</span>
+        <div className="h-16 border-b border-slate-800/50 bg-slate-900/80 backdrop-blur-md flex flex-col justify-center px-4 shrink-0 gap-1.5">
+          <div className="flex justify-between items-center">
+            <span className="text-[10px] font-bold text-slate-400 tracking-widest flex items-center gap-1.5"><GitBranch size={12}/> SWARM TARGET</span>
+            <button 
+              onClick={(e) => sendToBackend(e, "Run a full swarm code review on this repository.", false)}
+              disabled={isStreaming || !repoUrl}
+              className="flex items-center gap-1.5 bg-indigo-500/20 border border-indigo-500/50 text-indigo-400 px-3 py-1 rounded text-[10px] font-bold tracking-wider hover:bg-indigo-500/30 transition-colors disabled:opacity-50"
+            >
+              <Play size={10} /> INITIATE AUDIT
+            </button>
           </div>
-          <button onClick={handleExecute} className="flex items-center gap-1.5 bg-emerald-500/20 border border-emerald-500/50 text-emerald-400 px-3 py-1 rounded text-[10px] font-bold tracking-wider hover:bg-emerald-500/30 transition-colors">
-            <Play size={10} /> EXECUTE
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto custom-scrollbar relative bg-[#1e1e1e]">
-          <Editor
-            value={editorCode}
-            onValueChange={code => setEditorCode(code)}
-            highlight={code => Prism.highlight(code, Prism.languages.python, 'python')}
-            padding={20}
-            style={{ fontFamily: '"Fira Code", "JetBrains Mono", monospace', fontSize: 13, minHeight: '100%', outline: 'none' }}
-            className="text-slate-300"
+          <input 
+            type="text" 
+            value={repoUrl} 
+            onChange={(e) => setRepoUrl(e.target.value)}
+            placeholder="https://github.com/owner/repo"
+            className="w-full bg-black/30 border border-slate-700/50 rounded px-2 py-1 text-xs text-slate-300 outline-none focus:border-indigo-500/50"
           />
         </div>
 
-        {/* Execution Terminal */}
-        <div className="h-[30%] border-t border-slate-800/50 bg-[#0a0a0a] flex flex-col shrink-0">
-          <div className="h-8 border-b border-slate-800/50 flex items-center px-4">
-            <span className="text-[9px] font-bold text-slate-500 tracking-widest">TERMINAL OUTPUT</span>
-          </div>
-          <div className="flex-1 p-3 font-mono text-xs text-emerald-400 whitespace-pre-wrap overflow-y-auto custom-scrollbar">
-            {terminalOutput}
-          </div>
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-6 bg-[#0a0f1c] prose prose-invert prose-sm max-w-none">
+          <ReactMarkdown>{reviewReport}</ReactMarkdown>
         </div>
 
       </div>

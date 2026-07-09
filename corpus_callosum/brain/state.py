@@ -8,6 +8,7 @@ class AgentState(TypedDict):
     user_input:         str
     emotion_state:      str
     editor_code:        str
+    repo_code:          str
     messages:           Annotated[list[BaseMessage], add_messages]
     context:            List[str]
     is_urgent:          bool

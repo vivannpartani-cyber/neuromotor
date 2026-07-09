@@ -169,8 +169,7 @@ export default function Brain3D({ activeNodes }: Brain3DProps) {
           targetAlpha = 0.15; // Base lobe alpha
           const isActive = activeNodes.has(lobe);
           if (isActive) {
-            // High pulsing alpha when active
-            targetAlpha = 0.8 + Math.sin(state.clock.elapsedTime * 10 + i) * 0.2;
+            targetAlpha = 2.0 + Math.sin(state.clock.elapsedTime * 10 + i) * 0.5; // Huge glow
           }
         }
         
