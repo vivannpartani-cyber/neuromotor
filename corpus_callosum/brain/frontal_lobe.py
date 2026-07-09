@@ -1,36 +1,39 @@
-from langchain_openai import ChatOpenAI
+import os
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_tavily import TavilySearch
 from brain.state import AgentState
-import os
+from brain.llm import get_llm
 
 def _make_tools():
-    """Lazily instantiate tools only when TAVILY_API_KEY is present."""
+    """Only instantiate Tavily when the API key is present."""
     if os.getenv("TAVILY_API_KEY"):
         return [TavilySearch(max_results=2)]
     return []
 
 def frontal_lobe_node(state: AgentState) -> dict:
-    """The executive function that reasons through problems using tools and context."""
+    """Executive reasoning center — uses tools and context to produce the final response."""
     active_tools = _make_tools()
-    llm = ChatOpenAI(model="gpt-4o", temperature=0.2)
+    llm = get_llm(temperature=0.2)
     llm_with_tools = llm.bind_tools(active_tools) if active_tools else llm
-    
+
     context_str = "\n".join(state.get("context", []))
-    
+
     prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are the Frontal Lobe, the executive reasoning center. "
-                   "Use the provided Hippocampus context to inform your decisions, and use tools to gather external info.\n"
-                   f"Hippocampus Context:\n{context_str}"),
+        (
+            "system",
+            "You are the Frontal Lobe, the executive reasoning center of a multi-agent AI brain. "
+            "Use the Hippocampus context below to ground your response, and use your tools to "
+            "gather any additional real-world information you need.\n\n"
+            f"Hippocampus Context:\n{context_str or '(none retrieved)'}",
+        ),
         MessagesPlaceholder(variable_name="messages"),
-        ("user", "{user_input}")
+        ("user", "{user_input}"),
     ])
-    
+
     chain = prompt | llm_with_tools
-    
     response = chain.invoke({
-        "messages": state.get("messages", []), 
-        "user_input": state.get("user_input", "")
+        "messages": state.get("messages", []),
+        "user_input": state.get("user_input", ""),
     })
-    
+
     return {"messages": [response], "final_response": response.content}
