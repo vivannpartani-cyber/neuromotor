@@ -13,9 +13,8 @@ def lock_screen():
     if sys.platform == "darwin":
         # macOS
         try:
-            # Using pmset to put display to sleep (which locks if security settings require password on wake)
-            # Alternative: /System/Library/CoreServices/Menu\ Extras/User.menu/Contents/Resources/CGSession -suspend
-            subprocess.run(["pmset", "displaysleepnow"], check=True)
+            # Force actual lock screen via AppleScript (Cmd+Ctrl+Q)
+            subprocess.run(["osascript", "-e", 'tell application "System Events" to keystroke "q" using {command down, control down}'], check=True)
             logger.info("macOS screen locked successfully.")
         except subprocess.CalledProcessError as e:
             logger.error(f"Failed to lock macOS screen: {e}")

@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 MODEL_PATH = os.path.join(os.path.dirname(__file__), 'model.pkl')
 
 class NeuromotorModel:
-    def __init__(self, contamination: float = 0.05):
+    def __init__(self, contamination: float = 0.15):
         """
         contamination: The proportion of outliers in the data set. 
         Higher values make the model more aggressive at locking.
