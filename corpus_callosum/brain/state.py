@@ -11,7 +11,9 @@ class AgentState(TypedDict):
     context:            List[str]
     is_urgent:          bool
     final_response:     str
-    # Amygdala brief — passed to Frontal Lobe
     amygdala_brief:     dict
-    # Hippocampus report — passed to Frontal Lobe
     hippocampus_report: dict
+    syntax_out:         str
+    logic_out:          str
+    security_out:       str
+

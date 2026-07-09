@@ -75,17 +75,22 @@ async def chat(request: ChatRequest):
                             "repeat_topic":   report.get("repeat_topic", False),
                         }
 
-                    elif node_name == "frontal_lobe":
-                        meta["data"] = {"status": "reasoning"}
+                    elif "frontal_lobe" in event:
+                        node_data = event["frontal_lobe"]
+                        # We pass the final synthesized response to the frontend
+                        yield f'data: {{"node": "frontal_lobe", "data": {{}}}}\n\n'
+                        yield f'data: {{"node": "end", "response": {json.dumps(node_data.get("frontal_lobe_response", ""))}}}\n\n'
+                    else:
+                        # Catch the parallel nodes
+                        for node_name in ["syntax", "logic", "security"]:
+                            if node_name in event:
+                                yield f'data: {{"node": "{node_name}", "data": {{}}}}\n\n'
 
-                    elif node_name == "tools":
-                        meta["data"] = {"status": "web_search"}
+                        # Capture final response
+                        if node_updates.get("final_response"):
+                            final_response = node_updates["final_response"]
 
                     yield f"data: {json.dumps(meta)}\n\n"
-
-                    # Capture final response
-                    if node_updates.get("final_response"):
-                        final_response = node_updates["final_response"]
 
             yield f"data: {json.dumps({'node': 'end', 'response': final_response or 'Processing complete.'})}\n\n"
 
