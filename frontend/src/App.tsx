@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Activity } from 'lucide-react';
+import { Send, Activity, Mic, MicOff } from 'lucide-react';
 import Brain3D from './Brain3D';
 
 // ─────────────────────────────────────────
-// Types
+// Types & Metadata
 // ─────────────────────────────────────────
 type NodeKey = 'idle' | 'amygdala' | 'hippocampus' | 'frontal_lobe' | 'tools' | 'end' | 'error';
 
@@ -16,7 +16,6 @@ interface NodeData {
   memories_found?: number;
   memory_summary?: string;
   repeat_topic?: boolean;
-  status?: string;
 }
 
 interface Message {
@@ -27,15 +26,8 @@ interface Message {
   nodeDataMap?: Record<string, NodeData>;
   routeType?: 'urgent' | 'normal';
   timestamp: Date;
-  bciAccuracy?: number; // Only for user messages sent via BCI
+  isSubvocal?: boolean; // True if it came from SpeechRecognition
 }
-
-const LOBE_META: Record<string, { label: string; color: string; desc: string }> = {
-  amygdala:     { label: 'Amygdala',     color: '#f97316', desc: 'Threat & context assessment' },
-  hippocampus:  { label: 'Hippocampus',  color: '#a855f7', desc: 'Memory retrieval & write'   },
-  frontal_lobe: { label: 'Frontal Lobe', color: '#10b981', desc: 'Executive reasoning'         },
-  tools:        { label: 'Web Search',   color: '#3b82f6', desc: 'Live data lookup'             },
-};
 
 const STATUS_LABELS: Record<string, string> = {
   amygdala:     'Amygdala assessing threat level...',
@@ -45,41 +37,29 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 // ─────────────────────────────────────────
-// BCI Neural Waveform Animation
-// ─────────────────────────────────────────
-function NeuralWaveform() {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 40, gap: 3, overflow: 'hidden', padding: '0 10px' }}>
-      {Array.from({ length: 40 }).map((_, i) => (
-        <motion.div
-          key={i}
-          animate={{ height: [Math.random() * 10 + 5, Math.random() * 30 + 10, Math.random() * 10 + 5] }}
-          transition={{ repeat: Infinity, duration: Math.random() * 0.4 + 0.3, ease: 'easeInOut' }}
-          style={{ width: 3, background: '#3b82f6', borderRadius: 2, opacity: 0.8 }}
-        />
-      ))}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────
-// Node Activity Panel
+// Node Activity Panel (Glassmorphism)
 // ─────────────────────────────────────────
 function NodeActivityPanel({ activeNode, nodeDataMap }: { activeNode: NodeKey; nodeDataMap: Record<string, NodeData>; }) {
   const amygData  = nodeDataMap.amygdala;
   const hippoData = nodeDataMap.hippocampus;
 
   return (
-    <div style={{ padding: '0 14px 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+    <div className="flex flex-col gap-3 p-4">
       {/* Amygdala card */}
-      <motion.div animate={{ borderColor: activeNode === 'amygdala' ? '#f9731660' : amygData ? '#f9731630' : '#0f172a' }} style={{ border: '1px solid', borderRadius: 8, padding: '9px 12px', background: amygData ? '#f9731608' : 'transparent' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: amygData ? 6 : 0 }}>
-          <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#f97316', opacity: amygData ? 1 : 0.3, flexShrink: 0 }} />
-          <span style={{ fontSize: 11, fontWeight: 700, color: amygData ? '#f97316' : '#334155', fontFamily: 'Inter, system-ui' }}>Amygdala</span>
-          {activeNode === 'amygdala' && <motion.span animate={{ opacity: [1,0,1] }} transition={{ repeat: Infinity, duration: 0.7 }} style={{ marginLeft: 'auto', fontSize: 9, color: '#f97316', letterSpacing: 1 }}>ACTIVE</motion.span>}
+      <motion.div 
+        animate={{ 
+          borderColor: activeNode === 'amygdala' ? 'rgba(249, 115, 22, 0.5)' : amygData ? 'rgba(249, 115, 22, 0.2)' : 'rgba(30, 41, 59, 0.5)',
+          background: activeNode === 'amygdala' ? 'rgba(249, 115, 22, 0.1)' : 'rgba(15, 23, 42, 0.4)'
+        }} 
+        className="border rounded-xl p-3 backdrop-blur-md transition-colors"
+      >
+        <div className="flex items-center gap-2 mb-2">
+          <div className={`w-2 h-2 rounded-full ${amygData ? 'bg-orange-500' : 'bg-slate-700'}`} style={{ boxShadow: activeNode === 'amygdala' ? '0 0 10px #f97316' : 'none' }} />
+          <span className={`text-xs font-bold ${amygData ? 'text-orange-500' : 'text-slate-500'} uppercase tracking-wider`}>Amygdala</span>
+          {activeNode === 'amygdala' && <motion.span animate={{ opacity: [1,0,1] }} transition={{ repeat: Infinity, duration: 0.7 }} className="ml-auto text-[10px] font-bold text-orange-500 tracking-widest">ACTIVE</motion.span>}
         </div>
         {amygData && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+          <div className="flex flex-wrap gap-2">
             {amygData.threat_level !== undefined && <Tag color="#f97316" label={`Threat ${amygData.threat_level}/10`} />}
             {amygData.emotional_tone && <Tag color="#f97316" label={amygData.emotional_tone} />}
             {amygData.topic_domain   && <Tag color="#f97316" label={amygData.topic_domain}   />}
@@ -88,26 +68,38 @@ function NodeActivityPanel({ activeNode, nodeDataMap }: { activeNode: NodeKey; n
       </motion.div>
 
       {/* Hippocampus card */}
-      <motion.div animate={{ borderColor: activeNode === 'hippocampus' ? '#a855f760' : hippoData ? '#a855f730' : '#0f172a' }} style={{ border: '1px solid', borderRadius: 8, padding: '9px 12px', background: hippoData ? '#a855f708' : 'transparent' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: hippoData ? 6 : 0 }}>
-          <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#a855f7', opacity: hippoData ? 1 : 0.3, flexShrink: 0 }} />
-          <span style={{ fontSize: 11, fontWeight: 700, color: hippoData ? '#a855f7' : '#334155', fontFamily: 'Inter, system-ui' }}>Hippocampus (Supermemory.ai)</span>
-          {activeNode === 'hippocampus' && <motion.span animate={{ opacity: [1,0,1] }} transition={{ repeat: Infinity, duration: 0.7 }} style={{ marginLeft: 'auto', fontSize: 9, color: '#a855f7', letterSpacing: 1 }}>ACTIVE</motion.span>}
+      <motion.div 
+        animate={{ 
+          borderColor: activeNode === 'hippocampus' ? 'rgba(168, 85, 247, 0.5)' : hippoData ? 'rgba(168, 85, 247, 0.2)' : 'rgba(30, 41, 59, 0.5)',
+          background: activeNode === 'hippocampus' ? 'rgba(168, 85, 247, 0.1)' : 'rgba(15, 23, 42, 0.4)'
+        }} 
+        className="border rounded-xl p-3 backdrop-blur-md transition-colors"
+      >
+        <div className="flex items-center gap-2 mb-2">
+          <div className={`w-2 h-2 rounded-full ${hippoData ? 'bg-purple-500' : 'bg-slate-700'}`} style={{ boxShadow: activeNode === 'hippocampus' ? '0 0 10px #a855f7' : 'none' }} />
+          <span className={`text-xs font-bold ${hippoData ? 'text-purple-500' : 'text-slate-500'} uppercase tracking-wider`}>Hippocampus</span>
+          {activeNode === 'hippocampus' && <motion.span animate={{ opacity: [1,0,1] }} transition={{ repeat: Infinity, duration: 0.7 }} className="ml-auto text-[10px] font-bold text-purple-500 tracking-widest">ACTIVE</motion.span>}
         </div>
         {hippoData && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-            <Tag color="#a855f7" label={`${hippoData.memories_found ?? 0} memories retrieved`} />
-            {hippoData.repeat_topic && <Tag color="#f59e0b" label="Repeat topic ↺" />}
+          <div className="flex flex-wrap gap-2">
+            <Tag color="#a855f7" label={`${hippoData.memories_found ?? 0} Memories`} />
+            {hippoData.repeat_topic && <Tag color="#a855f7" label="Repeat Topic ↺" />}
           </div>
         )}
       </motion.div>
 
       {/* Frontal Lobe card */}
-      <motion.div animate={{ borderColor: activeNode === 'frontal_lobe' ? '#10b98160' : '#0f172a' }} style={{ border: '1px solid', borderRadius: 8, padding: '9px 12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-          <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#10b981', opacity: activeNode === 'frontal_lobe' ? 1 : 0.3, flexShrink: 0 }} />
-          <span style={{ fontSize: 11, fontWeight: 700, color: activeNode === 'frontal_lobe' ? '#10b981' : '#334155', fontFamily: 'Inter, system-ui' }}>Frontal Lobe</span>
-          {activeNode === 'frontal_lobe' && <motion.span animate={{ opacity: [1,0,1] }} transition={{ repeat: Infinity, duration: 0.7 }} style={{ marginLeft: 'auto', fontSize: 9, color: '#10b981', letterSpacing: 1 }}>ACTIVE</motion.span>}
+      <motion.div 
+        animate={{ 
+          borderColor: activeNode === 'frontal_lobe' ? 'rgba(16, 185, 129, 0.5)' : 'rgba(30, 41, 59, 0.5)',
+          background: activeNode === 'frontal_lobe' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(15, 23, 42, 0.4)'
+        }} 
+        className="border rounded-xl p-3 backdrop-blur-md transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <div className={`w-2 h-2 rounded-full ${activeNode === 'frontal_lobe' ? 'bg-emerald-500' : 'bg-slate-700'}`} style={{ boxShadow: activeNode === 'frontal_lobe' ? '0 0 10px #10b981' : 'none' }} />
+          <span className={`text-xs font-bold ${activeNode === 'frontal_lobe' ? 'text-emerald-500' : 'text-slate-500'} uppercase tracking-wider`}>Frontal Lobe</span>
+          {activeNode === 'frontal_lobe' && <motion.span animate={{ opacity: [1,0,1] }} transition={{ repeat: Infinity, duration: 0.7 }} className="ml-auto text-[10px] font-bold text-emerald-500 tracking-widest">ACTIVE</motion.span>}
         </div>
       </motion.div>
     </div>
@@ -115,7 +107,7 @@ function NodeActivityPanel({ activeNode, nodeDataMap }: { activeNode: NodeKey; n
 }
 
 function Tag({ color, label }: { color: string; label: string }) {
-  return <span style={{ fontSize: 9, padding: '2px 7px', borderRadius: 999, border: `1px solid ${color}40`, background: `${color}10`, color, fontFamily: 'Inter, system-ui', fontWeight: 600, letterSpacing: 0.3 }}>{label}</span>;
+  return <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 999, border: `1px solid ${color}40`, background: `${color}10`, color, fontWeight: 600 }}>{label}</span>;
 }
 
 // ─────────────────────────────────────────
@@ -124,36 +116,34 @@ function Tag({ color, label }: { color: string; label: string }) {
 function ChatMessage({ message }: { message: Message }) {
   const isUser = message.role === 'user';
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.22 }} style={{ marginBottom: 22, display: 'flex', flexDirection: 'column', alignItems: isUser ? 'flex-end' : 'flex-start' }}>
-      {/* BCI Accuracy Badge for user messages */}
-      {isUser && message.bciAccuracy && (
-        <div style={{ marginBottom: 6, fontSize: 10, color: '#3b82f6', fontFamily: 'Inter, system-ui', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
-          <Activity size={10} /> Brain2Qwerty Decoding ({(message.bciAccuracy * 100).toFixed(0)}% Accuracy)
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={`mb-6 flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
+      
+      {/* Subvocal Decoding Badge */}
+      {isUser && message.isSubvocal && (
+        <div className="mb-2 text-[10px] text-cyan-400 font-bold flex items-center gap-1 uppercase tracking-widest">
+          <Mic size={10} /> Subvocal Thought Decoded
         </div>
       )}
 
-      {/* Assistant Node Badges */}
-      {!isUser && message.nodeHistory && message.nodeHistory.length > 0 && (
-        <div style={{ display: 'flex', gap: 5, marginBottom: 7, flexWrap: 'wrap', alignItems: 'center' }}>
-          {message.nodeHistory.map((n, i) => {
-            const m = LOBE_META[n]; if (!m) return null;
-            return (
-              <React.Fragment key={i}>
-                <span style={{ fontSize: 10, padding: '2px 9px', borderRadius: 999, border: `1px solid ${m.color}40`, background: `${m.color}12`, color: m.color, fontFamily: 'Inter, system-ui', fontWeight: 600 }}>{m.label}</span>
-                {i < message.nodeHistory!.length - 1 && <span style={{ color: '#1e293b', fontSize: 10 }}>→</span>}
-              </React.Fragment>
-            );
-          })}
-          {message.routeType === 'urgent' && <span style={{ fontSize: 10, padding: '2px 9px', borderRadius: 999, border: '1px solid #f9731440', background: '#f9731412', color: '#f97316', fontFamily: 'Inter, system-ui', fontWeight: 700 }}>⚡ URGENT BYPASS</span>}
-          {message.nodeDataMap?.amygdala?.routing_note && <span style={{ fontSize: 9, color: '#334155', fontFamily: 'Inter, system-ui', fontStyle: 'italic', marginLeft: 2 }}>"{message.nodeDataMap.amygdala.routing_note}"</span>}
+      {/* Assistant Routing Badge */}
+      {!isUser && message.nodeDataMap?.amygdala?.routing_note && (
+        <div className="mb-2 max-w-[80%] flex flex-wrap items-center gap-2">
+          {message.routeType === 'urgent' && <span className="text-[10px] px-2 py-0.5 rounded-full border border-orange-500/50 bg-orange-500/10 text-orange-500 font-bold">⚡ URGENT BYPASS</span>}
+          <span className="text-[10px] text-slate-400 italic">"{message.nodeDataMap.amygdala.routing_note}"</span>
         </div>
       )}
       
       {/* Message Bubble */}
-      <div style={{ maxWidth: '78%', background: isUser ? (message.bciAccuracy ? 'linear-gradient(135deg, #2563eb, #3b82f6)' : 'linear-gradient(135deg, #4f46e5, #7c3aed)') : 'rgba(15,23,42,0.9)', border: isUser ? 'none' : '1px solid rgba(51,65,85,0.5)', borderRadius: isUser ? '18px 18px 4px 18px' : '18px 18px 18px 4px', padding: '12px 16px', color: '#e2e8f0', fontSize: 14, lineHeight: 1.65, fontFamily: 'Inter, system-ui', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+      <div 
+        className={`max-w-[80%] px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap break-words shadow-lg backdrop-blur-md ${
+          isUser 
+            ? (message.isSubvocal ? 'bg-gradient-to-br from-cyan-600 to-blue-600 text-white border-none rounded-[18px_18px_4px_18px]' : 'bg-gradient-to-br from-indigo-600 to-purple-600 text-white border-none rounded-[18px_18px_4px_18px]')
+            : 'bg-slate-900/60 border border-slate-700/50 text-slate-200 rounded-[18px_18px_18px_4px]'
+        }`}
+      >
         {message.content}
       </div>
-      <div style={{ fontSize: 10, color: '#334155', marginTop: 4, fontFamily: 'Inter, system-ui' }}>
+      <div className="text-[10px] text-slate-500 mt-1">
         {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
       </div>
     </motion.div>
@@ -166,29 +156,85 @@ function ChatMessage({ message }: { message: Message }) {
 export default function App() {
   const [messages, setMessages] = useState<Message[]>([{
     id: '0', role: 'assistant', timestamp: new Date(),
-    content: `Corpus Callosum is online — upgraded with Supermemory.ai and Brain2Qwerty v2.\n\n⚡ Amygdala: Instantly evaluates threats, emotional tone, and writes routing directives.\n💾 Hippocampus: Now uses Supermemory.ai's cloud graph to scale persistent memories infinitely.\n🧠 Frontal Lobe: The reasoning engine, briefed by the other two lobes before it acts.\n\nNEW: Toggle "Brain2Qwerty BCI Mode" below to simulate direct brain-to-text neural decoding instead of typing.`,
+    content: `Corpus Callosum V3 is online.\n\n🧠 Neural Particle Engine: Active.\n💾 Supermemory Graph: Connected.\n🎙️ Subvocal Mode: Click the Microphone to speak your thoughts directly into the system.`,
   }]);
   
   const [input, setInput] = useState('');
-  const [bciMode, setBciMode] = useState(false);
-  const [isDecoding, setIsDecoding] = useState(false);
+  const [isListening, setIsListening] = useState(false);
 
   const [activeNode, setActiveNode] = useState<NodeKey>('idle');
   const [doneNodes, setDoneNodes]   = useState<Set<NodeKey>>(new Set());
   const [liveNodeData, setLiveNodeData] = useState<Record<string, NodeData>>({});
   const [isStreaming, setIsStreaming] = useState(false);
-  const [statusText, setStatusText]  = useState('READY');
-  const [isError, setIsError]        = useState(false);
+  const [statusText, setStatusText]  = useState('SYSTEM READY');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef       = useRef<HTMLInputElement>(null);
+  const recognitionRef = useRef<any>(null);
 
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, isStreaming, isDecoding]);
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, isStreaming, isListening, input]);
 
-  const sendToBackend = async (query: string, bciAccuracy?: number) => {
-    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'user', content: query, timestamp: new Date(), bciAccuracy }]);
+  // Setup Web Speech API
+  useEffect(() => {
+    // @ts-ignore
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+      
+      recognition.onresult = (event: any) => {
+        let interimTranscript = '';
+        let finalTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript;
+          else interimTranscript += event.results[i][0].transcript;
+        }
+        if (finalTranscript) {
+          setInput(finalTranscript);
+          setIsListening(false);
+          sendToBackend(finalTranscript, true);
+        } else {
+          setInput(interimTranscript);
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        console.error('Speech recognition error', event.error);
+        setIsListening(false);
+        setStatusText('SUBVOCAL ERROR');
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognitionRef.current = recognition;
+    }
+  }, []);
+
+  const toggleListening = () => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+      setStatusText('SYSTEM READY');
+    } else {
+      if (recognitionRef.current) {
+        setInput('');
+        recognitionRef.current.start();
+        setIsListening(true);
+        setStatusText('LISTENING FOR SUBVOCAL THOUGHTS...');
+      } else {
+        alert("Your browser does not support the Web Speech API (Try Chrome).");
+      }
+    }
+  };
+
+  const sendToBackend = async (query: string, isSubvocal: boolean = false) => {
+    if (!query.trim()) return;
+    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'user', content: query, timestamp: new Date(), isSubvocal }]);
     setInput('');
-    setIsStreaming(true); setIsError(false); setDoneNodes(new Set()); setActiveNode('idle'); setLiveNodeData({}); setStatusText('CONNECTING...');
+    setIsStreaming(true); setDoneNodes(new Set()); setActiveNode('idle'); setLiveNodeData({}); setStatusText('CONNECTING...');
 
     const visited: NodeKey[] = [];
     const dataMap: Record<string, NodeData> = {};
@@ -212,7 +258,7 @@ export default function App() {
           try {
             const event = JSON.parse(line.slice(6));
             if (event.node === 'end') {
-              finalResp = event.response; setActiveNode('end'); setStatusText('DONE');
+              finalResp = event.response; setActiveNode('end'); setStatusText('SYSTEM READY');
             } else if (event.node === 'error') {
               throw new Error(event.error);
             } else {
@@ -229,141 +275,135 @@ export default function App() {
       const isUrgent = visited.includes('amygdala') && !visited.includes('hippocampus');
 
       setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', content: finalResp || 'No response generated.', nodeHistory: visited, nodeDataMap: { ...dataMap }, routeType: isUrgent ? 'urgent' : 'normal', timestamp: new Date() }]);
-      setStatusText('READY');
     } catch (err: any) {
-      setIsError(true); setActiveNode('idle'); setStatusText('ERROR');
+      setActiveNode('idle'); setStatusText('SYSTEM ERROR');
       setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', timestamp: new Date(), content: err.message?.includes('fetch') ? '⚠️ Cannot reach backend.' : `⚠️ ${err.message}` }]);
     } finally {
-      setIsStreaming(false); if (!bciMode) inputRef.current?.focus();
-    }
-  };
-
-  const handleStandardSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || isStreaming || isDecoding || bciMode) return;
-    sendToBackend(input.trim());
-  };
-
-  const triggerBciDecoding = async () => {
-    if (isStreaming || isDecoding) return;
-    setIsDecoding(true);
-    setStatusText('RECORDING MEG SIGNALS...');
-    
-    try {
-      const res = await fetch('http://localhost:8000/bci/decode', { method: 'POST' });
-      const data = await res.json();
-      await sendToBackend(data.decoded_text, data.confidence);
-    } catch (err) {
-      setIsError(true); setStatusText('BCI CONNECTION FAILED');
-      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', timestamp: new Date(), content: '⚠️ BCI Simulation failed. Is the backend running?' }]);
-    } finally {
-      setIsDecoding(false);
+      setIsStreaming(false);
     }
   };
 
   return (
-    <div style={{ display: 'flex', height: '100vh', background: '#020617', fontFamily: 'Inter, system-ui', overflow: 'hidden' }}>
-      {/* ── Left: 3D Brain + Node Activity ── */}
-      <div style={{ width: 330, flexShrink: 0, borderRight: '1px solid #0f172a', display: 'flex', flexDirection: 'column', background: '#020c1b', overflow: 'hidden' }}>
-        <div style={{ padding: '18px 18px 14px', borderBottom: '1px solid #0f172a', flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg, #7c3aed, #2563eb)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, boxShadow: '0 0 16px rgba(124,58,237,0.5)', flexShrink: 0 }}>🧠</div>
-            <div>
-              <div style={{ color: '#f1f5f9', fontWeight: 700, fontSize: 13, letterSpacing: '0.07em' }}>CORPUS CALLOSUM</div>
-              <div style={{ color: '#334155', fontSize: 9, letterSpacing: '0.16em', marginTop: 1 }}>POWERED BY SUPERMEMORY.AI</div>
-            </div>
+    <div className="flex h-screen bg-slate-950 font-sans overflow-hidden text-slate-200">
+      
+      {/* ── Left: 3D Brain + Node Activity (Glassmorphism Sidebar) ── */}
+      <div className="w-[340px] shrink-0 border-r border-slate-800/50 flex flex-col bg-slate-900/50 backdrop-blur-xl relative z-10 shadow-2xl">
+        
+        {/* Header */}
+        <div className="p-5 border-b border-slate-800/50 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-cyan-500 flex items-center justify-center text-xl shadow-[0_0_20px_rgba(99,102,241,0.5)]">🧠</div>
+          <div>
+            <div className="font-bold text-sm tracking-widest text-slate-100">CORPUS CALLOSUM</div>
+            <div className="text-[9px] font-bold tracking-[0.2em] text-cyan-400 mt-1">V3 OPEN SOURCE</div>
           </div>
         </div>
 
-        <div style={{ height: 260, flexShrink: 0, position: 'relative' }}>
-          <Suspense fallback={<div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#334155', fontSize: 12 }}>Loading 3D brain...</div>}>
+        {/* 3D Canvas */}
+        <div className="h-[280px] relative bg-black/20">
+          <Suspense fallback={<div className="h-full flex items-center justify-center text-xs text-slate-500 tracking-widest">INITIALIZING PARTICLE ENGINE...</div>}>
             <Brain3D activeNode={activeNode} doneNodes={doneNodes} />
           </Suspense>
-          <div style={{ position: 'absolute', bottom: 8, right: 10, display: 'flex', flexDirection: 'column', gap: 3 }}>
-            {[['#f97316', 'Amygdala'], ['#a855f7', 'Hippocampus'], ['#10b981', 'Frontal Lobe']].map(([c, l]) => (
-              <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 5 }}><div style={{ width: 6, height: 6, borderRadius: '50%', background: c, boxShadow: `0 0 5px ${c}` }} /><span style={{ fontSize: 9, color: '#475569', fontFamily: 'Inter, system-ui' }}>{l}</span></div>
+          {/* Legend overlay */}
+          <div className="absolute bottom-2 right-3 flex flex-col gap-1.5">
+            {[ {c: '#f97316', l: 'Amygdala'}, {c: '#a855f7', l: 'Hippocampus'}, {c: '#10b981', l: 'Frontal Lobe'} ].map(item => (
+              <div key={item.l} className="flex items-center gap-1.5">
+                <div className="w-1.5 h-1.5 rounded-full" style={{ background: item.c, boxShadow: `0 0 8px ${item.c}` }} />
+                <span className="text-[9px] text-slate-400 uppercase tracking-widest font-semibold">{item.l}</span>
+              </div>
             ))}
           </div>
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto' }}><NodeActivityPanel activeNode={activeNode} nodeDataMap={liveNodeData} /></div>
+        {/* Node Activity Cards */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
+          <NodeActivityPanel activeNode={activeNode} nodeDataMap={liveNodeData} />
+        </div>
 
-        <div style={{ padding: '11px 16px', borderTop: '1px solid #0f172a', flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <motion.div style={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0, background: isError ? '#ef4444' : (isStreaming || isDecoding) ? '#f97316' : '#10b981' }} animate={(isStreaming || isDecoding) ? { opacity: [1, 0.2, 1] } : { opacity: 1 }} transition={{ repeat: Infinity, duration: 0.75 }} />
-            <span style={{ fontSize: 10, color: '#475569', letterSpacing: '0.1em' }}>{statusText}</span>
-          </div>
+        {/* Status Bar */}
+        <div className="p-4 border-t border-slate-800/50 flex items-center gap-3 bg-slate-900/80 backdrop-blur-md">
+          <motion.div 
+            className={`w-2 h-2 rounded-full shrink-0 ${isStreaming || isListening ? 'bg-cyan-500' : 'bg-emerald-500'}`} 
+            animate={(isStreaming || isListening) ? { opacity: [1, 0.2, 1] } : { opacity: 1 }} 
+            transition={{ repeat: Infinity, duration: 1 }} 
+            style={{ boxShadow: `0 0 10px ${(isStreaming || isListening) ? '#06b6d4' : '#10b981'}` }}
+          />
+          <span className="text-[10px] font-bold text-slate-400 tracking-widest">{statusText}</span>
         </div>
       </div>
 
-      {/* ── Right: Chat ── */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div style={{ padding: '13px 22px', borderBottom: '1px solid #0f172a', display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(2,6,23,0.95)', flexShrink: 0 }}>
-          <span style={{ color: '#334155', fontSize: 11 }}>MODEL</span>
-          <span style={{ background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.25)', color: '#a78bfa', fontSize: 11, padding: '2px 10px', borderRadius: 999, fontWeight: 600 }}>openai/gpt-oss-120b</span>
-          
-          <div style={{ width: 1, height: 16, background: '#1e293b', margin: '0 4px' }} />
-          
-          <span style={{ color: '#334155', fontSize: 11 }}>INPUT</span>
-          <button 
-            onClick={() => { setBciMode(!bciMode); setInput(''); }}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, background: bciMode ? 'rgba(59, 130, 246, 0.15)' : 'transparent', border: `1px solid ${bciMode ? 'rgba(59, 130, 246, 0.4)' : 'rgba(51, 65, 85, 0.5)'}`, color: bciMode ? '#60a5fa' : '#64748b', fontSize: 11, padding: '2px 10px', borderRadius: 999, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}
-          >
-            <Activity size={12} /> {bciMode ? 'Brain2Qwerty BCI' : 'Keyboard'}
-          </button>
-          
-          <div style={{ flex: 1 }} />
-          <span style={{ color: '#1e293b', fontSize: 11 }}>{messages.filter(m => m.role === 'user').length} queries</span>
+      {/* ── Right: Chat Area ── */}
+      <div className="flex-1 flex flex-col relative z-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] bg-repeat opacity-95">
+        
+        {/* Top Bar */}
+        <div className="p-4 border-b border-slate-800/50 flex items-center gap-3 bg-slate-900/50 backdrop-blur-md shrink-0">
+          <span className="text-[10px] font-bold text-slate-500 tracking-widest">ENGINE</span>
+          <span className="bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[10px] px-3 py-1 rounded-full font-bold">openai/gpt-oss-120b</span>
+          <div className="flex-1" />
+          <span className="text-[10px] font-bold text-slate-500 tracking-widest">{messages.filter(m => m.role === 'user').length} QUERIES LOGGED</span>
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: '22px 26px 10px' }}>
+        {/* Chat History */}
+        <div className="flex-1 overflow-y-auto p-6 flex flex-col custom-scrollbar">
           <AnimatePresence>
             {messages.map(msg => <ChatMessage key={msg.id} message={msg} />)}
           </AnimatePresence>
-          {isDecoding && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ display: 'flex', marginBottom: 16, flexDirection: 'column', alignItems: 'flex-end' }}>
-              <div style={{ fontSize: 10, color: '#3b82f6', marginBottom: 6, fontFamily: 'Inter, system-ui', fontWeight: 600 }}>Recording MEG Signals...</div>
-              <div style={{ background: 'rgba(15,23,42,0.9)', border: '1px solid #1e293b', borderRadius: '18px 18px 4px 18px', padding: '12px 16px' }}><NeuralWaveform /></div>
-            </motion.div>
-          )}
-          {isStreaming && !isDecoding && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ display: 'flex', marginBottom: 16 }}>
-              <div style={{ display: 'flex', gap: 5, padding: '10px 14px', background: 'rgba(15,23,42,0.9)', border: '1px solid rgba(51,65,85,0.5)', borderRadius: '18px 18px 18px 4px', alignItems: 'center' }}>
-                {[0,1,2].map(i => <motion.div key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: '#475569' }} animate={{ opacity: [0.3,1,0.3], y: [0,-4,0] }} transition={{ repeat: Infinity, duration: 0.9, delay: i * 0.18 }} />)}
+
+          {isStreaming && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex mb-4">
+              <div className="flex gap-1.5 p-4 bg-slate-900/60 border border-slate-700/50 rounded-[18px_18px_18px_4px] items-center">
+                {[0,1,2].map(i => <motion.div key={i} className="w-1.5 h-1.5 rounded-full bg-slate-500" animate={{ opacity: [0.3,1,0.3], y: [0,-3,0] }} transition={{ repeat: Infinity, duration: 0.8, delay: i * 0.15 }} />)}
               </div>
             </motion.div>
           )}
           <div ref={messagesEndRef} />
         </div>
 
-        <div style={{ padding: '13px 22px 16px', borderTop: '1px solid #0f172a', background: 'rgba(2,6,23,0.95)', flexShrink: 0 }}>
-          {bciMode ? (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '10px 0' }}>
-              <p style={{ fontSize: 11, color: '#64748b', fontFamily: 'Inter, system-ui' }}>Brain2Qwerty v2 active. Simulating MEG neural decoding.</p>
-              <motion.button 
-                onClick={triggerBciDecoding} disabled={isStreaming || isDecoding}
-                whileHover={(!isStreaming && !isDecoding) ? { scale: 1.03, boxShadow: '0 0 20px rgba(59, 130, 246, 0.4)' } : {}} whileTap={(!isStreaming && !isDecoding) ? { scale: 0.97 } : {}}
-                style={{ background: 'linear-gradient(135deg, #2563eb, #3b82f6)', border: 'none', borderRadius: 999, padding: '12px 28px', color: '#fff', cursor: (isStreaming || isDecoding) ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, fontFamily: 'Inter, system-ui', opacity: (isStreaming || isDecoding) ? 0.5 : 1, transition: 'all 0.2s' }}
-              >
-                <Activity size={16} /> Decode Thought
-              </motion.button>
-            </div>
-          ) : (
-            <form onSubmit={handleStandardSubmit} style={{ display: 'flex', gap: 10 }}>
-              <input ref={inputRef} value={input} onChange={e => setInput(e.target.value)} disabled={isStreaming || isDecoding}
-                placeholder={isStreaming ? 'Brain is thinking...' : 'Send a message to the brain...'}
-                style={{ flex: 1, background: '#070f23', border: '1px solid #1e293b', borderRadius: 12, padding: '11px 16px', color: '#e2e8f0', fontSize: 14, outline: 'none', fontFamily: 'Inter, system-ui', transition: 'border-color 0.2s' }}
-                onFocus={e => (e.target.style.borderColor = '#4f46e580')} onBlur={e  => (e.target.style.borderColor = '#1e293b')}
-              />
-              <motion.button type="submit" disabled={!input.trim() || isStreaming || isDecoding}
-                whileHover={input.trim() && !isStreaming ? { scale: 1.03 } : {}} whileTap={input.trim() && !isStreaming ? { scale: 0.97 } : {}}
-                style={{ background: input.trim() && !isStreaming ? 'linear-gradient(135deg, #4f46e5, #7c3aed)' : '#0f172a', border: '1px solid', borderColor: input.trim() && !isStreaming ? 'transparent' : '#1e293b', borderRadius: 12, padding: '0 20px', color: input.trim() && !isStreaming ? '#fff' : '#334155', cursor: input.trim() && !isStreaming ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 600, fontFamily: 'Inter, system-ui', minWidth: 88, justifyContent: 'center', transition: 'all 0.2s', boxShadow: input.trim() && !isStreaming ? '0 0 18px rgba(79,70,229,0.4)' : 'none' }}
-              >
-                <Send size={14} /> Send
-              </motion.button>
-            </form>
-          )}
+        {/* Input Area (Glassmorphism) */}
+        <div className="p-5 border-t border-slate-800/50 bg-slate-900/80 backdrop-blur-xl shrink-0">
+          <form onSubmit={e => { e.preventDefault(); sendToBackend(input); }} className="flex gap-3">
+            
+            {/* Mic Toggle Button */}
+            <motion.button 
+              type="button" 
+              onClick={toggleListening}
+              whileHover={{ scale: 1.05 }} 
+              whileTap={{ scale: 0.95 }}
+              className={`p-3.5 rounded-xl border flex items-center justify-center transition-colors ${
+                isListening 
+                  ? 'bg-red-500/10 border-red-500/50 text-red-500 shadow-[0_0_15px_rgba(239,68,68,0.2)]' 
+                  : 'bg-slate-800/50 border-slate-700/50 text-slate-400 hover:text-cyan-400 hover:border-cyan-500/50'
+              }`}
+              title="Toggle Subvocal Decoding"
+            >
+              {isListening ? <Mic className="animate-pulse" size={18} /> : <MicOff size={18} />}
+            </motion.button>
+
+            {/* Input Field */}
+            <input 
+              value={input} 
+              onChange={e => setInput(e.target.value)} 
+              disabled={isStreaming || isListening}
+              placeholder={isListening ? 'Listening to your thoughts...' : isStreaming ? 'Graph is processing...' : 'Type a query...'}
+              className="flex-1 bg-black/40 border border-slate-700/50 rounded-xl px-4 py-3 text-sm text-slate-200 outline-none focus:border-indigo-500/70 focus:shadow-[0_0_15px_rgba(99,102,241,0.15)] transition-all placeholder:text-slate-600 disabled:opacity-50"
+            />
+
+            {/* Send Button */}
+            <motion.button 
+              type="submit" 
+              disabled={!input.trim() || isStreaming || isListening}
+              whileHover={input.trim() && !isStreaming ? { scale: 1.02 } : {}} 
+              whileTap={input.trim() && !isStreaming ? { scale: 0.98 } : {}}
+              className={`px-6 rounded-xl flex items-center gap-2 text-sm font-bold tracking-wider transition-all ${
+                input.trim() && !isStreaming 
+                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-[0_0_20px_rgba(99,102,241,0.4)]' 
+                  : 'bg-slate-800/50 text-slate-500 cursor-not-allowed border border-slate-700/50'
+              }`}
+            >
+              <Send size={16} /> SEND
+            </motion.button>
+          </form>
         </div>
+
       </div>
     </div>
   );

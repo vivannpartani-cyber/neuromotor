@@ -28,42 +28,8 @@ class ChatRequest(BaseModel):
 async def health():
     return {"status": "online", "model": "openai/gpt-oss-120b", "backend": "Groq", "bci": "Brain2Qwerty v2"}
 
-import asyncio
-import random
-
-@app.post("/bci/decode")
-async def bci_decode():
-    """
-    Simulates Brain2Qwerty v2 inference over an MEG signal.
-    In reality, we load the facebookresearch/brain2qwerty model weights, 
-    but without a physical MEG scanner, we simulate the decoding process
-    and inject the paper's reported ~22% Word Error Rate (78% accuracy).
-    """
-    await asyncio.sleep(2.5) # Simulate PyTorch inference latency
-    
-    # Pool of thoughts to decode
-    thoughts = [
-        "What is the capital of France?",
-        "Explain quantum computing simply",
-        "Write a python script to sort a list",
-        "Stop all processes immediately",
-        "Who is the CEO of Meta?",
-        "What is my favorite color?",
-    ]
-    
-    selected = random.choice(thoughts)
-    
-    # Simulate Brain2Qwerty v2's 78% accuracy by randomly injecting slight typos
-    chars = list(selected)
-    for i in range(len(chars)):
-        if random.random() > 0.95 and chars[i].isalpha():
-            chars[i] = random.choice('abcdefghijklmnopqrstuvwxyz')
-            
-    decoded_text = "".join(chars)
-    return {"decoded_text": decoded_text, "confidence": round(random.uniform(0.61, 0.78), 2)}
-
-
 @app.post("/chat")
+
 async def chat(request: ChatRequest):
     async def generate():
         try:

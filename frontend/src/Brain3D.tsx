@@ -1,310 +1,152 @@
-import { useRef, useMemo } from 'react';
+import React, { useMemo, useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, Line } from '@react-three/drei';
+import { OrbitControls } from '@react-three/drei';
+import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import * as THREE from 'three';
 
-type NodeKey = 'idle' | 'amygdala' | 'hippocampus' | 'frontal_lobe' | 'tools' | 'end' | 'error';
+// ─────────────────────────────────────────
+// Brain Particle System
+// ─────────────────────────────────────────
+function BrainParticles({ activeNode, doneNodes }: { activeNode: string; doneNodes: Set<string> }) {
+  const pointsRef = useRef<THREE.Points>(null);
 
-// Anatomically-inspired positions on the brain surface
-const LOBE_POSITIONS: Record<string, [number, number, number]> = {
-  amygdala:     [0.65,  -0.55,  0.52],   // temporal lobe, anterior-medial
-  hippocampus:  [-0.58, -0.48, -0.25],   // medial temporal lobe
-  frontal_lobe: [0,      0.70,  1.05],   // prefrontal cortex
-};
+  const PARTICLE_COUNT = 15000;
+  
+  // Mathematical procedural generation of a point-cloud brain
+  const [positions, colors] = useMemo(() => {
+    const pos = new Float32Array(PARTICLE_COUNT * 3);
+    const col = new Float32Array(PARTICLE_COUNT * 3);
+    const baseColor = new THREE.Color('#3b82f6'); // Default blue-ish
 
-const LOBE_COLORS: Record<string, THREE.Color> = {
-  amygdala:     new THREE.Color('#f97316'),
-  hippocampus:  new THREE.Color('#a855f7'),
-  frontal_lobe: new THREE.Color('#10b981'),
-};
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      // 1. Generate random point in an ellipsoid (rough brain shape)
+      let r = Math.cbrt(Math.random()) * 2.5; // Radius
+      let theta = Math.random() * 2 * Math.PI;
+      let phi = Math.acos(2 * Math.random() - 1);
+      
+      let x = r * Math.sin(phi) * Math.cos(theta) * 0.8; // Width
+      let y = r * Math.sin(phi) * Math.sin(theta) * 1.1; // Height
+      let z = r * Math.cos(phi) * 1.4; // Length
+      
+      // 2. Separate into hemispheres (Sagittal Fissure)
+      if (x > 0) x += 0.15;
+      else x -= 0.15;
+      
+      // 3. Add random noise for "gyri and sulci" texture
+      x += (Math.random() - 0.5) * 0.2;
+      y += (Math.random() - 0.5) * 0.2;
+      z += (Math.random() - 0.5) * 0.2;
 
-// ─────────────────────────────────────────────────────
-// Procedural brain hemisphere with gyral folds
-// ─────────────────────────────────────────────────────
-function Hemisphere({ flip }: { flip?: boolean }) {
-  const geometry = useMemo(() => {
-    const geo = new THREE.SphereGeometry(1.28, 128, 128);
-    const pos = geo.attributes.position as THREE.BufferAttribute;
+      pos[i * 3] = x;
+      pos[i * 3 + 1] = y;
+      pos[i * 3 + 2] = z;
 
-    for (let i = 0; i < pos.count; i++) {
-      const x = pos.getX(i);
-      const y = pos.getY(i);
-      const z = pos.getZ(i);
-      const r = Math.sqrt(x * x + y * y + z * z);
-      if (r === 0) continue;
-
-      const theta = Math.acos(Math.max(-1, Math.min(1, y / r)));
-      const phi   = Math.atan2(z, x);
-
-      // Overlapping sinusoids → gyri + sulci (brain folds)
-      const fold =
-        Math.sin(theta * 6.8  + phi * 2.9) * 0.074 +
-        Math.sin(theta * 11.5 + phi * 6.3) * 0.044 +
-        Math.cos(theta * 4.2  - phi * 4.8) * 0.058 +
-        Math.sin(theta * 18.1 + phi * 9.7) * 0.021 +
-        Math.cos(theta * 8.6  - phi * 3.3) * 0.036 +
-        Math.sin(theta * 14.4 + phi * 7.1) * 0.028;
-
-      const nr = r + fold;
-      pos.setXYZ(i, (x / r) * nr, (y / r) * nr, (z / r) * nr);
+      // Initialize all with a dark blue glow
+      col[i * 3] = baseColor.r * 0.3;
+      col[i * 3 + 1] = baseColor.g * 0.3;
+      col[i * 3 + 2] = baseColor.b * 0.3;
     }
-    geo.computeVertexNormals();
-    return geo;
+    return [pos, col];
   }, []);
 
-  return (
-    <mesh
-      geometry={geometry}
-      position={flip ? [-0.53, 0, 0] : [0.53, 0, 0]}
-      scale={flip ? [-1, 1, 1] : [1, 1, 1]}
-    >
-      <meshStandardMaterial
-        color="#b57878"
-        roughness={0.84}
-        metalness={0.04}
-        side={THREE.FrontSide}
-      />
-    </mesh>
-  );
-}
-
-// ─────────────────────────────────────────────────────
-// Cerebellum (back-bottom of brain)
-// ─────────────────────────────────────────────────────
-function Cerebellum() {
-  const geometry = useMemo(() => {
-    const geo = new THREE.SphereGeometry(0.62, 48, 48);
-    geo.scale(1.35, 0.65, 1.0);
-    const pos = geo.attributes.position as THREE.BufferAttribute;
-    for (let i = 0; i < pos.count; i++) {
-      const x = pos.getX(i);
-      const y = pos.getY(i);
-      const z = pos.getZ(i);
-      const r = Math.sqrt(x * x + y * y + z * z);
-      if (r === 0) continue;
-      const theta = Math.acos(Math.max(-1, Math.min(1, y / r)));
-      const fold = Math.sin(theta * 22) * 0.045 + Math.sin(theta * 14 + x * 8) * 0.028;
-      const nr = r + fold;
-      pos.setXYZ(i, (x / r) * nr, (y / r) * nr, (z / r) * nr);
-    }
-    geo.computeVertexNormals();
-    return geo;
-  }, []);
-
-  return (
-    <mesh geometry={geometry} position={[0, -0.92, -1.05]}>
-      <meshStandardMaterial color="#9e6060" roughness={0.88} metalness={0.02} />
-    </mesh>
-  );
-}
-
-// ─────────────────────────────────────────────────────
-// Brainstem
-// ─────────────────────────────────────────────────────
-function Brainstem() {
-  return (
-    <mesh position={[0, -1.5, -0.1]}>
-      <cylinderGeometry args={[0.26, 0.17, 0.75, 24]} />
-      <meshStandardMaterial color="#9a5c5c" roughness={0.9} />
-    </mesh>
-  );
-}
-
-// ─────────────────────────────────────────────────────
-// Glowing lobe region overlay
-// ─────────────────────────────────────────────────────
-function LobeGlow({ lobeKey, isActive, isDone }: {
-  lobeKey: string; isActive: boolean; isDone: boolean;
-}) {
-  const meshRef  = useRef<THREE.Mesh>(null);
-  const lightRef = useRef<THREE.PointLight>(null);
-  const position = LOBE_POSITIONS[lobeKey] as [number, number, number];
-  const color    = LOBE_COLORS[lobeKey];
-
+  // Animate the particle colors based on active nodes
   useFrame(({ clock }) => {
-    const t = clock.getElapsedTime();
-    if (!meshRef.current) return;
-    const mat = meshRef.current.material as THREE.MeshStandardMaterial;
+    if (!pointsRef.current) return;
+    const time = clock.getElapsedTime();
+    const colorsArr = pointsRef.current.geometry.attributes.color.array as Float32Array;
+    const posArr = pointsRef.current.geometry.attributes.position.array as Float32Array;
 
-    if (isActive) {
-      const pulse = 0.45 + Math.sin(t * 5.5) * 0.3;
-      mat.emissiveIntensity    = pulse;
-      mat.opacity              = 0.6 + Math.sin(t * 5.5) * 0.2;
-      meshRef.current.scale.setScalar(1 + Math.sin(t * 5.5) * 0.12);
-      if (lightRef.current) lightRef.current.intensity = 2.5 + Math.sin(t * 5.5) * 1.5;
-    } else if (isDone) {
-      mat.emissiveIntensity    = 0.18;
-      mat.opacity              = 0.45;
-      meshRef.current.scale.setScalar(1);
-      if (lightRef.current) lightRef.current.intensity = 0.55;
-    } else {
-      mat.emissiveIntensity    = 0.04;
-      mat.opacity              = 0.18;
-      meshRef.current.scale.setScalar(1);
-      if (lightRef.current) lightRef.current.intensity = 0;
+    const targetColors: Record<string, THREE.Color> = {
+      amygdala: new THREE.Color('#f97316'), // Orange
+      hippocampus: new THREE.Color('#a855f7'), // Purple
+      frontal_lobe: new THREE.Color('#10b981'), // Green
+      base: new THREE.Color('#3b82f6').multiplyScalar(0.2) // Dim blue
+    };
+
+    // Locate rough coordinate centers for lobes
+    const centers = {
+      amygdala: new THREE.Vector3(0, -0.5, 0),
+      hippocampus: new THREE.Vector3(0, -0.2, 0.5),
+      frontal_lobe: new THREE.Vector3(0, 1.0, 1.0)
+    };
+
+    const isIdle = activeNode === 'idle' || activeNode === 'end';
+    
+    // Rotate the whole brain slowly
+    pointsRef.current.rotation.y = time * 0.1;
+    pointsRef.current.rotation.z = Math.sin(time * 0.2) * 0.05;
+
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      const x = posArr[i * 3];
+      const y = posArr[i * 3 + 1];
+      const z = posArr[i * 3 + 2];
+      
+      const pt = new THREE.Vector3(x, y, z);
+      let r = targetColors.base.r;
+      let g = targetColors.base.g;
+      let b = targetColors.base.b;
+      let intensity = 1.0;
+
+      // Pulse the whole brain when idle
+      if (isIdle) {
+        intensity = 1.0 + Math.sin(time * 2 + y * 2) * 0.3;
+      } 
+      // If a node is active, highlight the region
+      else {
+        // Frontal Lobe activation
+        if (activeNode === 'frontal_lobe' && pt.distanceTo(centers.frontal_lobe) < 1.8) {
+          intensity = 3.0 + Math.sin(time * 8) * 2;
+          r = targetColors.frontal_lobe.r; g = targetColors.frontal_lobe.g; b = targetColors.frontal_lobe.b;
+        }
+        // Amygdala activation
+        else if (activeNode === 'amygdala' && pt.distanceTo(centers.amygdala) < 1.2) {
+          intensity = 4.0 + Math.random() * 2; // Frantic flickering
+          r = targetColors.amygdala.r; g = targetColors.amygdala.g; b = targetColors.amygdala.b;
+        }
+        // Hippocampus activation
+        else if (activeNode === 'hippocampus' && pt.distanceTo(centers.hippocampus) < 1.5) {
+          intensity = 2.0 + Math.sin(time * 4) * 1.5;
+          r = targetColors.hippocampus.r; g = targetColors.hippocampus.g; b = targetColors.hippocampus.b;
+        }
+      }
+
+      // Smooth color transition
+      colorsArr[i * 3] += (r * intensity - colorsArr[i * 3]) * 0.1;
+      colorsArr[i * 3 + 1] += (g * intensity - colorsArr[i * 3 + 1]) * 0.1;
+      colorsArr[i * 3 + 2] += (b * intensity - colorsArr[i * 3 + 2]) * 0.1;
     }
+    
+    pointsRef.current.geometry.attributes.color.needsUpdate = true;
   });
 
   return (
-    <>
-      <mesh ref={meshRef} position={position}>
-        <sphereGeometry args={[0.3, 32, 32]} />
-        <meshStandardMaterial
-          color={color}
-          emissive={color}
-          emissiveIntensity={0.04}
-          transparent
-          opacity={0.18}
-          depthWrite={false}
-          blending={THREE.AdditiveBlending}
-        />
-      </mesh>
-      <pointLight
-        ref={lightRef}
-        position={position}
-        color={color}
-        intensity={0}
-        distance={2.8}
-        decay={2}
-      />
-    </>
+    <points ref={pointsRef}>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" count={PARTICLE_COUNT} array={positions} itemSize={3} />
+        <bufferAttribute attach="attributes-color" count={PARTICLE_COUNT} array={colors} itemSize={3} />
+      </bufferGeometry>
+      {/* Additive blending makes the points glow when overlapping */}
+      <pointsMaterial size={0.03} vertexColors blending={THREE.AdditiveBlending} depthWrite={false} transparent opacity={0.8} />
+    </points>
   );
 }
 
-// ─────────────────────────────────────────────────────
-// Animated synaptic arc (signal traveling between lobes)
-// ─────────────────────────────────────────────────────
-function SynapticArc({ from, to, color, active }: {
-  from: [number, number, number];
-  to: [number, number, number];
-  color: THREE.Color;
-  active: boolean;
-}) {
-  const dotRef = useRef<THREE.Mesh>(null);
-  const tRef   = useRef(0);
-
-  const curvePoints = useMemo(() => {
-    const mid: [number, number, number] = [
-      (from[0] + to[0]) / 2,
-      (from[1] + to[1]) / 2 + 0.4,
-      (from[2] + to[2]) / 2,
-    ];
-    const curve = new THREE.QuadraticBezierCurve3(
-      new THREE.Vector3(...from),
-      new THREE.Vector3(...mid),
-      new THREE.Vector3(...to),
-    );
-    return curve.getPoints(30);
-  }, [from, to]);
-
-  useFrame((_, delta) => {
-    if (!active || !dotRef.current) { tRef.current = 0; return; }
-    tRef.current = (tRef.current + delta * 1.2) % 1;
-    const idx = Math.floor(tRef.current * (curvePoints.length - 1));
-    const pt  = curvePoints[idx];
-    dotRef.current.position.set(pt.x, pt.y, pt.z);
-  });
-
-  if (!active) return null;
-
+// ─────────────────────────────────────────
+// Main Component
+// ─────────────────────────────────────────
+export default function Brain3D({ activeNode, doneNodes }: { activeNode: string; doneNodes: Set<string> }) {
   return (
-    <>
-      <Line
-        points={curvePoints.map(p => [p.x, p.y, p.z] as [number, number, number])}
-        color={color}
-        lineWidth={1.2}
-        transparent
-        opacity={0.35}
-      />
-      <mesh ref={dotRef} position={from}>
-        <sphereGeometry args={[0.055, 12, 12]} />
-        <meshStandardMaterial
-          color={color}
-          emissive={color}
-          emissiveIntensity={2.5}
-          blending={THREE.AdditiveBlending}
-          transparent
-          opacity={0.95}
-          depthWrite={false}
-        />
-      </mesh>
-    </>
-  );
-}
+    <Canvas camera={{ position: [5, 2, -4], fov: 45 }} gl={{ antialias: false, alpha: true }}>
+      <color attach="background" args={['#020617']} />
+      
+      <OrbitControls enableZoom={false} enablePan={false} autoRotate={false} />
+      
+      <BrainParticles activeNode={activeNode} doneNodes={doneNodes} />
 
-// ─────────────────────────────────────────────────────
-// Full brain scene
-// ─────────────────────────────────────────────────────
-function BrainScene({ activeNode, doneNodes }: {
-  activeNode: NodeKey; doneNodes: Set<NodeKey>;
-}) {
-  const active = (k: string) => activeNode === k;
-  const done   = (k: string) => doneNodes.has(k as NodeKey);
-
-  return (
-    <>
-      {/* Lighting */}
-      <ambientLight intensity={0.18} />
-      <directionalLight position={[6, 6, 6]}   intensity={0.55} color="#fff8f0" />
-      <directionalLight position={[-4, 3, -5]}  intensity={0.18} color="#8090ff" />
-      <directionalLight position={[0, -4, 2]}   intensity={0.08} color="#ff9060" />
-
-      {/* Brain anatomy */}
-      <Hemisphere />
-      <Hemisphere flip />
-      <Cerebellum />
-      <Brainstem />
-
-      {/* Mid-sagittal fissure */}
-      <mesh position={[0, 0.15, 0]}>
-        <boxGeometry args={[0.07, 2.35, 2.5]} />
-        <meshStandardMaterial color="#06070f" transparent opacity={0.97} />
-      </mesh>
-
-      {/* Lobe glows */}
-      {Object.keys(LOBE_POSITIONS).map(k => (
-        <LobeGlow key={k} lobeKey={k} isActive={active(k)} isDone={done(k)} />
-      ))}
-
-      {/* Synaptic signal arcs */}
-      <SynapticArc
-        from={LOBE_POSITIONS.amygdala}
-        to={LOBE_POSITIONS.hippocampus}
-        color={LOBE_COLORS.hippocampus}
-        active={active('hippocampus')}
-      />
-      <SynapticArc
-        from={LOBE_POSITIONS.hippocampus}
-        to={LOBE_POSITIONS.frontal_lobe}
-        color={LOBE_COLORS.frontal_lobe}
-        active={active('frontal_lobe')}
-      />
-
-      <OrbitControls
-        autoRotate
-        autoRotateSpeed={0.55}
-        enableZoom={false}
-        enablePan={false}
-        minPolarAngle={Math.PI / 5}
-        maxPolarAngle={Math.PI * 4 / 5}
-      />
-    </>
-  );
-}
-
-// ─────────────────────────────────────────────────────
-// Exported component
-// ─────────────────────────────────────────────────────
-export default function Brain3D({ activeNode, doneNodes }: {
-  activeNode: NodeKey; doneNodes: Set<NodeKey>;
-}) {
-  return (
-    <Canvas
-      camera={{ position: [0, 0.4, 4.6], fov: 44 }}
-      gl={{ antialias: true, alpha: true }}
-      style={{ background: 'transparent' }}
-    >
-      <BrainScene activeNode={activeNode} doneNodes={doneNodes} />
+      {/* Bloom Post-Processing for the crazy neon glow */}
+      <EffectComposer disableNormalPass>
+        <Bloom luminanceThreshold={0.2} mipmapBlur intensity={1.5} />
+      </EffectComposer>
     </Canvas>
   );
 }
