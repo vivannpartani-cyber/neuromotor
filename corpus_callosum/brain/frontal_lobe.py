@@ -28,7 +28,12 @@ You receive parallel processed inputs from your Hidden Layers. Your job is to sy
 [SECURITY NODE (Insular Lobe) OUTPUT]:
 {state.get("security_out")}
 
-Synthesize the above into the final output. If Amygdala threat is high, be concise. Present the final code clearly. Do not reveal the inner node outputs to the user directly unless it's useful to explain the synthesis.
+[CURRENT EDITOR CODE]:
+{state.get("editor_code", "None")}
+
+Synthesize the above into the final output. If the user is frustrated, offer a helpful debug or fix.
+IMPORTANT: Any code you write MUST be placed inside triple backticks (```python ... ```). 
+The frontend parses these blocks directly into the user's Scratchpad.
 """
     
     response = llm.invoke([

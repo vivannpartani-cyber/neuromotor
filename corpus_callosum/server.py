@@ -21,8 +21,9 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 
 class ChatRequest(BaseModel):
-    message: str
+    message: str | None = None
     emotion_state: str | None = None
+    editor_code: str | None = None
 
 
 
@@ -38,9 +39,11 @@ async def chat(request: ChatRequest):
             from brain.callosum import corpus_callosum
 
             initial_state = {
-                "user_input":         request.message,
+                "user_input":         request.message or "",
                 "emotion_state":      request.emotion_state,
+                "editor_code":        request.editor_code,
                 "messages":           [],
+
                 "context":            [],
                 "is_urgent":          False,
                 "final_response":     "",

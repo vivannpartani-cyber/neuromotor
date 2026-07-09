@@ -22,11 +22,14 @@ Your job is to produce a strict JSON brief.
 CURRENT BIOMETRIC SENSOR DATA:
 User Facial Emotion: {physical_emotion.upper()}
 
-Based on the user's message AND their facial emotion, output JSON with:
+CURRENT EDITOR CODE:
+{state.get("editor_code", "None")}
+
+Based on the user's message, their facial emotion, and the code they are working on, output JSON with:
 - "threat_level": 0-10 (10 is immediate physical/system danger, anger increases threat)
-- "emotional_tone": string (e.g., "hostile", "panicked", "calm", "curious", heavily influenced by facial emotion)
+- "emotional_tone": string (e.g., "hostile", "panicked", "calm", "curious")
 - "topic_domain": string (e.g., "coding", "general", "system_alert")
-- "routing_note": string (A strict 1-sentence directive to the Frontal Lobe on how to behave, e.g., "User is visibly angry; be concise and apologetic" or "User is relaxed; proceed normally")
+- "routing_note": string (A strict 1-sentence directive to the Frontal Lobe, e.g., "User is frustrated with this python code; step in and debug it." or "User is relaxed.")
 """
     
     user_input = state.get("user_input", "")
