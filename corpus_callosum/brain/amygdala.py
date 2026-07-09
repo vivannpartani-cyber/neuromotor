@@ -1,74 +1,57 @@
 """
-Amygdala Node — The Sentinel
+Amygdala Node — The Sentinel and Biometric Evaluator
 
-Not just urgent/not-urgent. This agent performs a full threat + context
-assessment and produces a routing brief that downstream agents use to
-calibrate their approach. It's the fastest, most tightly scoped agent —
-zero tools, zero memory, zero latency.
+Evaluates threats, sets the emotional tone based on raw biometric data
+from the webcam, and dictates routing rules for the Frontal Lobe.
 """
-from pydantic import BaseModel, Field
-from langchain_core.prompts import PromptTemplate
+import os
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import SystemMessage, HumanMessage
+import json
 from brain.state import AgentState
-from brain.llm import get_llm
-
-
-class AmygdalaResponse(BaseModel):
-    is_urgent: bool = Field(
-        description="True ONLY for immediate interrupts: 'stop', 'delete now', 'emergency', etc."
-    )
-    threat_level: int = Field(
-        ge=0, le=10,
-        description="0=benign curiosity, 5=complex/sensitive, 10=critical interrupt"
-    )
-    emotional_tone: str = Field(
-        description="One of: neutral | curious | analytical | distressed | urgent | hostile | creative"
-    )
-    topic_domain: str = Field(
-        description="Primary domain: science | technology | personal | creative | philosophy | current_events | code | math | other"
-    )
-    routing_note: str = Field(
-        description=(
-            "A one-sentence briefing for the Frontal Lobe on HOW to answer this. "
-            "e.g. 'User seems distressed — be concise and empathetic.' "
-            "or 'Deep technical question — prioritize accuracy over brevity.'"
-        )
-    )
-    immediate_action: str = Field(
-        description="The reflex response text if is_urgent=True, else empty string."
-    )
-
-
-AMYGDALA_PROMPT = PromptTemplate.from_template(
-    """You are the Amygdala — the sentinel agent of a multi-agent AI brain.
-
-Your ONLY job is rapid threat and context assessment. You do NOT answer the user's question.
-You produce a structured brief that routes the query and briefs downstream agents.
-
-Assess the following user input across these dimensions:
-1. Is it an urgent interrupt requiring instant action? (e.g. "STOP", "DELETE", "EMERGENCY")
-2. What is the threat/complexity level (0-10)?
-3. What emotional tone does the user have?
-4. What domain does this query belong to?
-5. Write a one-sentence routing note for the Frontal Lobe on HOW to approach this.
-
-User Input: {input}"""
-)
-
 
 def amygdala_node(state: AgentState) -> dict:
-    """Sentinel — rapid threat assessment and routing brief."""
-    llm = get_llm(temperature=0)
-    structured_llm = llm.with_structured_output(AmygdalaResponse)
-    chain = AMYGDALA_PROMPT | structured_llm
-    result: AmygdalaResponse = chain.invoke({"input": state.get("user_input", "")})
+    llm = ChatOpenAI(model="openai/gpt-oss-120b", temperature=0, base_url="https://api.groq.com/openai/v1", api_key=os.getenv("GROQ_API_KEY"))
+    
+    physical_emotion = state.get("emotion_state") or "neutral"
+    
+    sys_prompt = f"""You are the Amygdala, the primitive survival center of the brain.
+You receive raw inputs from the external world and biometric sensors.
+Your job is to produce a strict JSON brief.
 
-    return {
-        "is_urgent": result.is_urgent,
-        "amygdala_brief": {
-            "threat_level":   result.threat_level,
-            "emotional_tone": result.emotional_tone,
-            "topic_domain":   result.topic_domain,
-            "routing_note":   result.routing_note,
-        },
-        "final_response": result.immediate_action if result.is_urgent else "",
-    }
+CURRENT BIOMETRIC SENSOR DATA:
+User Facial Emotion: {physical_emotion.upper()}
+
+Based on the user's message AND their facial emotion, output JSON with:
+- "threat_level": 0-10 (10 is immediate physical/system danger, anger increases threat)
+- "emotional_tone": string (e.g., "hostile", "panicked", "calm", "curious", heavily influenced by facial emotion)
+- "topic_domain": string (e.g., "coding", "general", "system_alert")
+- "routing_note": string (A strict 1-sentence directive to the Frontal Lobe on how to behave, e.g., "User is visibly angry; be concise and apologetic" or "User is relaxed; proceed normally")
+"""
+    
+    user_input = state.get("user_input", "")
+    
+    response = llm.invoke([
+        SystemMessage(content=sys_prompt),
+        HumanMessage(content=f"Message: {user_input}")
+    ])
+    
+    try:
+        # Groq might wrap in markdown blocks, strip them if present
+        content = response.content.strip()
+        if content.startswith("```json"):
+            content = content[7:-3]
+        elif content.startswith("```"):
+            content = content[3:-3]
+            
+        brief = json.loads(content.strip())
+    except Exception as e:
+        print(f"[Amygdala] Failed to parse JSON: {e} - Raw: {response.content}")
+        brief = {
+            "threat_level": 0,
+            "emotional_tone": physical_emotion,
+            "topic_domain": "unknown",
+            "routing_note": "Proceed normally."
+        }
+        
+    return {"amygdala_brief": brief}

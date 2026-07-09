@@ -14,11 +14,13 @@
     "@react-three/fiber": "^9.6.1",
     "@react-three/postprocessing": "^3.0.4",
     "@types/three": "^0.185.1",
+    "@vladmandic/face-api": "^1.7.15",
     "clsx": "^2.1.1",
     "framer-motion": "^12.42.2",
     "lucide-react": "^1.24.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "react-webcam": "^7.2.0",
     "recharts": "^3.9.2",
     "tailwind-merge": "^3.6.0",
     "three": "^0.185.1"

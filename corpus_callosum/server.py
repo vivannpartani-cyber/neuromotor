@@ -22,6 +22,8 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 class ChatRequest(BaseModel):
     message: str
+    emotion_state: str | None = None
+
 
 
 @app.get("/health")
@@ -37,6 +39,7 @@ async def chat(request: ChatRequest):
 
             initial_state = {
                 "user_input":         request.message,
+                "emotion_state":      request.emotion_state,
                 "messages":           [],
                 "context":            [],
                 "is_urgent":          False,
