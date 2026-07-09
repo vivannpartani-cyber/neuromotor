@@ -1,0 +1,23 @@
+[project]
+name = "corpus-callosum"
+version = "0.1.0"
+description = "A graph-based multi-agent architecture modeled after human neuroanatomy"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "langgraph>=0.1.0",
+    "langchain>=0.2.0",
+    "langchain-community>=0.2.0",
+    "langchain-tavily>=0.1.0",
+    "langchain-openai>=0.1.0",
+    "chromadb>=0.5.0",
+    "tavily-python>=0.3.3",
+    "pydantic>=2.0.0"
+]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["brain*"]

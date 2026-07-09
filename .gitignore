@@ -37,6 +37,10 @@ venv/
 
 # Models / Data
 *.pkl
+baseline_data.json
+
+# ChromaDB local vector store
+hippocampus_memory/
 
 # Node
 node_modules/
