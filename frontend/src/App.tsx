@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Send, Camera, Shield, Code, Zap } from 'lucide-react';
 import Webcam from 'react-webcam';
 import * as faceapi from '@vladmandic/face-api';
+import { Canvas } from '@react-three/fiber';
 import Brain3D from './Brain3D';
 
 // ─────────────────────────────────────────
@@ -200,9 +201,12 @@ export default function App() {
         {/* 3D Canvas */}
         <div className="flex-1 bg-black/40">
           <Suspense fallback={<div className="h-full flex items-center justify-center text-xs text-slate-500 tracking-widest">BOOTING NEURAL ENGINE...</div>}>
-            <Brain3D activeNodes={activeNodes} />
+            <Canvas camera={{ position: [0, 0, 5], fov: 45 }}>
+              <Brain3D activeNodes={activeNodes} />
+            </Canvas>
           </Suspense>
         </div>
+
         
         {/* Network Status Footer */}
         <div className="h-16 bg-slate-950/80 backdrop-blur-xl border-t border-slate-800/50 flex items-center px-6 gap-6">
