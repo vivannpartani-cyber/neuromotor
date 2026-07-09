@@ -1,277 +1,579 @@
-import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { ShieldAlert, Cpu, Activity, Fingerprint, Lock, Copy, Check } from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import React, { useState, useRef, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Send } from 'lucide-react';
 
-// Mock Data for the simulation
-const generateMockData = () => {
-  const data = [];
-  let time = 0;
-  
-  // Normal typing (User)
-  for (let i = 0; i < 20; i++) {
-    data.push({
-      time: time++,
-      dwell: 90 + Math.random() * 20,
-      flight: 1500 + Math.random() * 200,
-      anomalyScore: 0.1 + Math.random() * 0.1,
-      status: 'normal'
-    });
-  }
-  
-  // Intruder takes over
-  for (let i = 0; i < 10; i++) {
-    data.push({
-      time: time++,
-      dwell: 160 + Math.random() * 40,
-      flight: 2200 + Math.random() * 500,
-      anomalyScore: 0.8 + Math.random() * 0.2,
-      status: 'threat'
-    });
-  }
-  return data;
+// ─────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────
+type NodeKey = 'idle' | 'amygdala' | 'hippocampus' | 'frontal_lobe' | 'tools' | 'end' | 'error';
+
+interface Message {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  nodeHistory?: NodeKey[];
+  timestamp: Date;
+}
+
+interface NodeConfig {
+  key: NodeKey;
+  label: string;
+  sublabel: string;
+  color: string;
+  cy: number;
+  emoji: string;
+}
+
+// ─────────────────────────────────────────
+// Node Definitions
+// ─────────────────────────────────────────
+const NODES: NodeConfig[] = [
+  { key: 'amygdala',     label: 'Amygdala',     sublabel: 'Threat Router',       color: '#f97316', cy: 75,  emoji: '⚡' },
+  { key: 'hippocampus',  label: 'Hippocampus',   sublabel: 'Long-term Memory',    color: '#a855f7', cy: 210, emoji: '💾' },
+  { key: 'frontal_lobe', label: 'Frontal Lobe',  sublabel: 'Executive Function',  color: '#10b981', cy: 345, emoji: '⚙️' },
+];
+
+const NODE_META: Record<string, { badge: string; color: string }> = {
+  amygdala:     { badge: '⚡ Amygdala',     color: '#f97316' },
+  hippocampus:  { badge: '💾 Hippocampus',  color: '#a855f7' },
+  frontal_lobe: { badge: '⚙️ Frontal Lobe', color: '#10b981' },
+  tools:        { badge: '🔍 Tools',        color: '#3b82f6' },
 };
 
-const MOCK_DATA = generateMockData();
-
-const CodeSnippet = ({ code }: { code: string }) => {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  return (
-    <div className="relative group rounded-lg overflow-hidden bg-black/60 border border-emerald-500/20 backdrop-blur-md">
-      <div className="flex items-center justify-between px-4 py-2 bg-black/40 border-b border-emerald-500/20">
-        <div className="flex space-x-2">
-          <div className="w-3 h-3 rounded-full bg-red-500/80"></div>
-          <div className="w-3 h-3 rounded-full bg-yellow-500/80"></div>
-          <div className="w-3 h-3 rounded-full bg-green-500/80"></div>
-        </div>
-        <span className="text-xs text-emerald-400/60 font-mono">Terminal</span>
-      </div>
-      <div className="p-4 font-mono text-sm text-emerald-300 flex justify-between items-center">
-        <code>$ {code}</code>
-        <button 
-          onClick={handleCopy}
-          className="text-emerald-500/50 hover:text-emerald-400 transition-colors focus:outline-none"
-        >
-          {copied ? <Check size={16} /> : <Copy size={16} />}
-        </button>
-      </div>
-    </div>
-  );
+const STATUS_MAP: Record<string, string> = {
+  amygdala:     '⚡ Amygdala scanning for threats...',
+  hippocampus:  '💾 Hippocampus retrieving memories...',
+  frontal_lobe: '⚙️  Frontal Lobe reasoning...',
+  tools:        '🔍 Executing external tools...',
 };
 
-export default function App() {
-  const [chartData, setChartData] = useState<any[]>([]);
-  const [isAnimating, setIsAnimating] = useState(true);
-
-  // Animate the chart filling up
-  useEffect(() => {
-    if (!isAnimating) return;
-    
-    let currentIndex = 0;
-    const interval = setInterval(() => {
-      if (currentIndex < MOCK_DATA.length) {
-        setChartData(prev => {
-          const newData = [...prev, MOCK_DATA[currentIndex]];
-          if (newData.length > 25) return newData.slice(-25);
-          return newData;
-        });
-        currentIndex++;
-      } else {
-        clearInterval(interval);
-        setTimeout(() => {
-          setChartData([]);
-          setIsAnimating(true); // restart loop
-        }, 3000);
-      }
-    }, 200);
-
-    return () => clearInterval(interval);
-  }, [isAnimating]);
-
+// ─────────────────────────────────────────
+// Signal Connection (SVG animated line)
+// ─────────────────────────────────────────
+function Connection({ fromY, toY, isActive, color }: {
+  fromY: number; toY: number; isActive: boolean; color: string;
+}) {
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200 font-sans selection:bg-emerald-500/30">
-      {/* Background Gradients */}
-      <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-emerald-900/20 blur-[120px] rounded-full"></div>
-        <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-blue-900/10 blur-[120px] rounded-full"></div>
-      </div>
-
-      {/* Navbar */}
-      <nav className="relative z-10 border-b border-white/5 bg-slate-950/50 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Fingerprint className="text-emerald-500" size={24} />
-            <span className="font-bold text-lg tracking-tight text-white">Neuromotor-Auth</span>
-          </div>
-          <div className="flex space-x-6 text-sm font-medium text-slate-400">
-            <a href="#features" className="hover:text-emerald-400 transition-colors">Features</a>
-            <a href="#how-it-works" className="hover:text-emerald-400 transition-colors">How it Works</a>
-            <a href="#install" className="hover:text-emerald-400 transition-colors">Install</a>
-          </div>
-        </div>
-      </nav>
-
-      <main className="relative z-10">
-        {/* Hero Section */}
-        <section className="max-w-7xl mx-auto px-6 pt-32 pb-20 text-center">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-          >
-            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold uppercase tracking-wider mb-8">
-              <ShieldAlert size={14} />
-              <span>Zero-Trust Security</span>
-            </div>
-            
-            <h1 className="text-5xl md:text-7xl font-extrabold text-white tracking-tight mb-8">
-              Authenticate with your <br />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">
-                Subconscious.
-              </span>
-            </h1>
-            
-            <p className="max-w-2xl mx-auto text-lg md:text-xl text-slate-400 mb-12 leading-relaxed">
-              Neuromotor is a headless background daemon that continuously analyzes your typing cadence and mouse micro-movements. If an intruder touches your keyboard, the OS locks instantly.
-            </p>
-
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <div className="w-full sm:w-96">
-                <CodeSnippet code="pip install neuromotor-auth" />
-              </div>
-              <a 
-                href="#docs" 
-                className="px-6 py-4 rounded-lg bg-emerald-500 text-slate-950 font-bold hover:bg-emerald-400 transition-colors"
-              >
-                Read Docs
-              </a>
-            </div>
-          </motion.div>
-        </section>
-
-        {/* Live Simulation Chart Section */}
-        <section className="max-w-7xl mx-auto px-6 py-20" id="how-it-works">
-          <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8 backdrop-blur-sm shadow-2xl">
-            <div className="flex items-center justify-between mb-8">
-              <div>
-                <h3 className="text-2xl font-bold text-white mb-2">Live Intrusion Simulation</h3>
-                <p className="text-slate-400">Monitoring keystroke dwell velocity and flight patterns.</p>
-              </div>
-              <div className="flex items-center space-x-2">
-                <span className="relative flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-                </span>
-                <span className="text-sm font-medium text-emerald-500 uppercase tracking-wider">Active</span>
-              </div>
-            </div>
-
-            <div className="h-80 w-full">
-              {(() => {
-                const isThreat = chartData.length > 0 && chartData[chartData.length - 1].status === 'threat';
-                return (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="colorDwell" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                          <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                        </linearGradient>
-                        <linearGradient id="colorThreat" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3}/>
-                          <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                      <XAxis dataKey="time" hide />
-                      <YAxis stroke="#475569" fontSize={12} tickFormatter={(val) => `${val}ms`} />
-                      <Tooltip 
-                        contentStyle={{ backgroundColor: '#020617', borderColor: '#1e293b', borderRadius: '0.5rem' }}
-                        itemStyle={{ color: '#e2e8f0' }}
-                      />
-                      <Area 
-                        type="monotone" 
-                        dataKey="dwell" 
-                        name="Dwell Time"
-                        stroke={isThreat ? '#ef4444' : '#10b981'} 
-                        fill={isThreat ? 'url(#colorThreat)' : 'url(#colorDwell)'} 
-                        strokeWidth={2} 
-                        isAnimationActive={false}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                );
-              })()}
-            </div>
-            
-            {/* Status Indicator */}
-            <div className="mt-6 flex justify-center">
-               <div className={`px-4 py-2 rounded-full font-bold text-sm tracking-widest uppercase transition-colors duration-300 ${chartData.length > 0 && chartData[chartData.length - 1].status === 'threat' ? 'bg-red-500/20 text-red-500 border border-red-500/50' : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'}`}>
-                 {chartData.length > 0 && chartData[chartData.length - 1].status === 'threat' ? '🚨 ANOMALY DETECTED: LOCKING OS 🚨' : 'SYSTEM SECURE: USER VERIFIED'}
-               </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Features Grid */}
-        <section className="max-w-7xl mx-auto px-6 py-20" id="features">
-          <div className="grid md:grid-cols-3 gap-8">
-            <FeatureCard 
-              icon={<Cpu className="text-emerald-400" size={32} />}
-              title="Local Machine Learning"
-              description="Powered by a local Isolation Forest algorithm (scikit-learn). Zero network calls. Zero latency. Complete privacy."
-            />
-            <FeatureCard 
-              icon={<Activity className="text-emerald-400" size={32} />}
-              title="Continuous Biometrics"
-              description="Monitors Key-Dwell, Flight-Time, and Cursor Micro-accelerations in real-time. If you step away and someone else types, it knows."
-            />
-            <FeatureCard 
-              icon={<Lock className="text-emerald-400" size={32} />}
-              title="Instant OS Lock"
-              description="Headless daemon runs silently in the background. If an intruder is detected, it instantly triggers a hard-lock via AppleScript."
-            />
-          </div>
-        </section>
-
-        {/* Install Instructions */}
-        <section className="max-w-3xl mx-auto px-6 py-20 text-center" id="install">
-          <h2 className="text-3xl font-bold text-white mb-6">Start Securing Your Terminal</h2>
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 text-left">
-            <h4 className="text-lg font-semibold text-white mb-4">1. Install via Pip</h4>
-            <div className="mb-6"><CodeSnippet code="pip install neuromotor-auth" /></div>
-            
-            <h4 className="text-lg font-semibold text-white mb-4">2. Train your Baseline (60s)</h4>
-            <div className="mb-6"><CodeSnippet code="neuromotor train --duration 60" /></div>
-            
-            <h4 className="text-lg font-semibold text-white mb-4">3. Arm the Defense Daemon</h4>
-            <div><CodeSnippet code="neuromotor defend" /></div>
-          </div>
-        </section>
-      </main>
-
-      <footer className="border-t border-white/5 bg-slate-950 py-8 text-center text-slate-500 text-sm">
-        <p>Built with privacy first. Your keystrokes never leave your machine.</p>
-      </footer>
-    </div>
+    <g>
+      <line x1={150} y1={fromY + 38} x2={150} y2={toY - 38}
+        stroke="#1e293b" strokeWidth={2} />
+      {isActive && (
+        <motion.circle cx={150} r={5} fill={color}
+          initial={{ cy: fromY + 38, opacity: 0 }}
+          animate={{ cy: [fromY + 38, toY - 38], opacity: [0, 1, 1, 0] }}
+          transition={{ duration: 0.7, ease: 'easeInOut', repeat: Infinity, repeatDelay: 0.1 }}
+        />
+      )}
+    </g>
   );
 }
 
-function FeatureCard({ icon, title, description }: { icon: React.ReactNode, title: string, description: string }) {
+// ─────────────────────────────────────────
+// Brain Node (SVG)
+// ─────────────────────────────────────────
+function BrainNode({ node, status }: {
+  node: NodeConfig;
+  status: 'idle' | 'active' | 'done';
+}) {
+  const isActive = status === 'active';
+  const isDone   = status === 'done';
+  const fillColor = isActive || isDone ? node.color : '#0f172a';
+  const textColor = isActive || isDone ? node.color : '#334155';
+
   return (
-    <div className="p-6 rounded-2xl bg-slate-900/40 border border-slate-800 hover:border-emerald-500/30 transition-colors group">
-      <div className="w-14 h-14 rounded-xl bg-slate-800 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-        {icon}
+    <motion.g animate={{ opacity: status === 'idle' ? 0.3 : 1 }} transition={{ duration: 0.3 }}>
+      {/* Pulsing outer ring */}
+      {isActive && (
+        <motion.circle cx={150} cy={node.cy} r={46} fill="none"
+          stroke={node.color} strokeWidth={1.5}
+          animate={{ r: [42, 50, 42], opacity: [0.4, 0.9, 0.4] }}
+          transition={{ repeat: Infinity, duration: 1.1, ease: 'easeInOut' }}
+        />
+      )}
+      {isDone && (
+        <circle cx={150} cy={node.cy} r={43} fill="none"
+          stroke={node.color} strokeWidth={1} opacity={0.35} />
+      )}
+
+      {/* Main circle */}
+      <motion.circle cx={150} cy={node.cy} r={32}
+        fill={fillColor}
+        animate={{ fill: fillColor }}
+        transition={{ duration: 0.4 }}
+        style={{ filter: isActive ? `drop-shadow(0 0 12px ${node.color}88)` : 'none' }}
+      />
+
+      {/* Inner dot */}
+      <circle cx={150} cy={node.cy} r={9}
+        fill={isActive || isDone ? 'rgba(255,255,255,0.85)' : '#1e293b'} />
+
+      {/* Emoji (rendered as foreign object for crisp display) */}
+      <text x={150} y={node.cy + 5} textAnchor="middle"
+        fontSize={11} fill={isActive || isDone ? '#fff' : '#334155'}
+        fontFamily="system-ui">
+        {node.emoji}
+      </text>
+
+      {/* Labels */}
+      <text x={150} y={node.cy + 52} textAnchor="middle"
+        fill={textColor} fontSize={12} fontWeight={600}
+        fontFamily="Inter, system-ui, sans-serif">
+        {node.label}
+      </text>
+      <text x={150} y={node.cy + 67} textAnchor="middle"
+        fill="#475569" fontSize={10}
+        fontFamily="Inter, system-ui, sans-serif">
+        {node.sublabel}
+      </text>
+    </motion.g>
+  );
+}
+
+// ─────────────────────────────────────────
+// Full Brain Visualizer
+// ─────────────────────────────────────────
+function BrainVisualizer({ activeNode, doneNodes }: {
+  activeNode: NodeKey; doneNodes: Set<NodeKey>;
+}) {
+  const getStatus = (key: NodeKey): 'idle' | 'active' | 'done' =>
+    activeNode === key ? 'active' : doneNodes.has(key) ? 'done' : 'idle';
+
+  const isComplete = doneNodes.has('frontal_lobe') || doneNodes.has('amygdala');
+
+  return (
+    <svg viewBox="0 0 300 480" width="100%" style={{ maxWidth: 260 }}>
+      {/* Urgent bypass (dashed, right side) */}
+      <line x1={188} y1={82}  x2={228} y2={82}  stroke="#f9731630" strokeWidth={1} strokeDasharray="4,3" />
+      <line x1={228} y1={82}  x2={228} y2={398} stroke="#f9731630" strokeWidth={1} strokeDasharray="4,3" />
+      <line x1={188} y1={398} x2={228} y2={398} stroke="#f9731630" strokeWidth={1} strokeDasharray="4,3" />
+      <text x={234} y={242} fill="#f9731625" fontSize={8}
+        fontFamily="Inter, system-ui, sans-serif"
+        transform="rotate(90, 234, 242)" textAnchor="middle" letterSpacing={2}>
+        URGENT BYPASS
+      </text>
+
+      {/* Connection signals */}
+      <Connection fromY={75}  toY={210} isActive={activeNode === 'hippocampus'}  color="#a855f7" />
+      <Connection fromY={210} toY={345} isActive={activeNode === 'frontal_lobe'} color="#10b981" />
+
+      {/* Output indicator */}
+      <line x1={150} y1={383} x2={150} y2={425} stroke={isComplete ? '#10b981' : '#1e293b'} strokeWidth={2} />
+      <AnimatePresence>
+        {isComplete ? (
+          <motion.text key="done" x={150} y={442} textAnchor="middle"
+            fill="#10b981" fontSize={11} fontWeight={700}
+            fontFamily="Inter, system-ui, sans-serif"
+            initial={{ opacity: 0, y: 448 }} animate={{ opacity: 1, y: 442 }}>
+            ✓ RESPONSE
+          </motion.text>
+        ) : (
+          <text key="idle" x={150} y={442} textAnchor="middle"
+            fill="#1e293b" fontSize={11}
+            fontFamily="Inter, system-ui, sans-serif">
+            OUTPUT
+          </text>
+        )}
+      </AnimatePresence>
+
+      {/* Nodes */}
+      {NODES.map(node => (
+        <BrainNode key={node.key} node={node} status={getStatus(node.key)} />
+      ))}
+    </svg>
+  );
+}
+
+// ─────────────────────────────────────────
+// Chat Message
+// ─────────────────────────────────────────
+function ChatMessage({ message }: { message: Message }) {
+  const isUser = message.role === 'user';
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25 }}
+      style={{ marginBottom: 24, display: 'flex', flexDirection: 'column',
+        alignItems: isUser ? 'flex-end' : 'flex-start' }}
+    >
+      {/* Node badges */}
+      {!isUser && message.nodeHistory && message.nodeHistory.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+          {message.nodeHistory.map((n, i) => {
+            const meta = NODE_META[n];
+            if (!meta) return null;
+            return (
+              <span key={i} style={{
+                fontSize: 10, padding: '2px 9px', borderRadius: 999,
+                border: `1px solid ${meta.color}40`,
+                background: `${meta.color}12`,
+                color: meta.color,
+                fontFamily: 'Inter, system-ui, sans-serif',
+                fontWeight: 600,
+              }}>
+                {meta.badge}
+              </span>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Bubble */}
+      <div style={{
+        maxWidth: '78%',
+        background: isUser
+          ? 'linear-gradient(135deg, #4f46e5, #7c3aed)'
+          : 'rgba(15, 23, 42, 0.9)',
+        border: isUser ? 'none' : '1px solid rgba(51, 65, 85, 0.5)',
+        borderRadius: isUser ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+        padding: '12px 16px',
+        color: '#e2e8f0',
+        fontSize: 14,
+        lineHeight: 1.65,
+        fontFamily: 'Inter, system-ui, sans-serif',
+        whiteSpace: 'pre-wrap',
+        wordBreak: 'break-word',
+      }}>
+        {message.content}
       </div>
-      <h3 className="text-xl font-bold text-white mb-3">{title}</h3>
-      <p className="text-slate-400 leading-relaxed">{description}</p>
+
+      <div style={{
+        fontSize: 10, color: '#334155', marginTop: 5,
+        fontFamily: 'Inter, system-ui, sans-serif',
+      }}>
+        {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+      </div>
+    </motion.div>
+  );
+}
+
+// ─────────────────────────────────────────
+// Typing Indicator
+// ─────────────────────────────────────────
+function TypingIndicator() {
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+      style={{ display: 'flex', marginBottom: 20 }}>
+      <div style={{
+        display: 'flex', gap: 5, alignItems: 'center',
+        padding: '10px 14px',
+        background: 'rgba(15, 23, 42, 0.9)',
+        border: '1px solid rgba(51, 65, 85, 0.5)',
+        borderRadius: '18px 18px 18px 4px',
+      }}>
+        {[0, 1, 2].map(i => (
+          <motion.div key={i}
+            style={{ width: 6, height: 6, borderRadius: '50%', background: '#475569' }}
+            animate={{ opacity: [0.3, 1, 0.3], y: [0, -4, 0] }}
+            transition={{ repeat: Infinity, duration: 0.9, delay: i * 0.18 }}
+          />
+        ))}
+      </div>
+    </motion.div>
+  );
+}
+
+// ─────────────────────────────────────────
+// App
+// ─────────────────────────────────────────
+export default function App() {
+  const [messages, setMessages] = useState<Message[]>([{
+    id: '0',
+    role: 'assistant',
+    content: 'Corpus Callosum is online.\n\nI\'m a multi-agent AI system modeled after human neuroanatomy — watch the brain diagram on the left as I think. Each query flows through:\n\n  ⚡ Amygdala → threat detection\n  💾 Hippocampus → memory retrieval\n  ⚙️  Frontal Lobe → reasoning + tools\n\nAsk me anything.',
+    timestamp: new Date(),
+  }]);
+  const [input, setInput]           = useState('');
+  const [activeNode, setActiveNode] = useState<NodeKey>('idle');
+  const [doneNodes, setDoneNodes]   = useState<Set<NodeKey>>(new Set());
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [statusText, setStatusText]  = useState('READY');
+  const [isError, setIsError]        = useState(false);
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef       = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isStreaming]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || isStreaming) return;
+
+    const query = input.trim();
+    const userMsg: Message = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: query,
+      timestamp: new Date(),
+    };
+
+    setMessages(prev => [...prev, userMsg]);
+    setInput('');
+    setIsStreaming(true);
+    setIsError(false);
+    setDoneNodes(new Set());
+    setActiveNode('idle');
+    setStatusText('CONNECTING...');
+
+    const visited: NodeKey[] = [];
+
+    try {
+      const res = await fetch('http://localhost:8000/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: query }),
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const reader  = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer    = '';
+      let finalResp = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const data = JSON.parse(line.slice(6));
+
+            if (data.node === 'end') {
+              finalResp = data.response;
+              setActiveNode('end');
+              setStatusText('DONE');
+            } else if (data.node === 'error') {
+              throw new Error(data.error);
+            } else {
+              const key = data.node as NodeKey;
+              visited.push(key);
+              // Mark previous as done, activate current
+              setDoneNodes(new Set(visited.slice(0, -1)));
+              setActiveNode(key);
+              setStatusText((STATUS_MAP[key] ?? 'PROCESSING').toUpperCase());
+            }
+          } catch { /* skip malformed lines */ }
+        }
+      }
+
+      setDoneNodes(new Set(visited));
+      setActiveNode('idle');
+
+      setMessages(prev => [...prev, {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: finalResp || 'No response generated.',
+        nodeHistory: visited,
+        timestamp: new Date(),
+      }]);
+      setStatusText('READY');
+
+    } catch (err: any) {
+      setIsError(true);
+      setActiveNode('idle');
+      setStatusText('ERROR');
+      const isConnErr = err.message?.includes('fetch') || err.message?.includes('Failed');
+      setMessages(prev => [...prev, {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: isConnErr
+          ? '⚠️  Cannot reach backend. Start the server:\n\n  cd corpus_callosum\n  uvicorn server:app --reload'
+          : `⚠️  Error: ${err.message}`,
+        timestamp: new Date(),
+      }]);
+    } finally {
+      setIsStreaming(false);
+      inputRef.current?.focus();
+    }
+  };
+
+  return (
+    <div style={{
+      display: 'flex', height: '100vh',
+      background: '#020617',
+      fontFamily: 'Inter, system-ui, sans-serif',
+      overflow: 'hidden',
+    }}>
+
+      {/* ── Left: Brain Visualizer ── */}
+      <div style={{
+        width: 300, flexShrink: 0,
+        borderRight: '1px solid #0f172a',
+        display: 'flex', flexDirection: 'column',
+        background: 'rgba(2, 6, 23, 0.95)',
+      }}>
+        {/* Brand */}
+        <div style={{
+          padding: '22px 22px 18px',
+          borderBottom: '1px solid #0f172a',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{
+              width: 34, height: 34, borderRadius: '50%',
+              background: 'linear-gradient(135deg, #7c3aed, #2563eb)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 17, flexShrink: 0,
+              boxShadow: '0 0 16px rgba(124, 58, 237, 0.4)',
+            }}>
+              🧠
+            </div>
+            <div>
+              <div style={{
+                color: '#f1f5f9', fontWeight: 700, fontSize: 14,
+                letterSpacing: '0.08em',
+              }}>
+                CORPUS CALLOSUM
+              </div>
+              <div style={{ color: '#334155', fontSize: 9, letterSpacing: '0.14em', marginTop: 1 }}>
+                NEURO-ARCHITECTURE AI
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* SVG Brain */}
+        <div style={{
+          flex: 1, display: 'flex',
+          alignItems: 'center', justifyContent: 'center',
+          padding: '8px 20px',
+        }}>
+          <BrainVisualizer activeNode={activeNode} doneNodes={doneNodes} />
+        </div>
+
+        {/* Status Bar */}
+        <div style={{ padding: '14px 22px', borderTop: '1px solid #0f172a' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <motion.div
+              style={{
+                width: 7, height: 7, borderRadius: '50%',
+                background: isError ? '#ef4444' : isStreaming ? '#f97316' : '#10b981',
+                flexShrink: 0,
+              }}
+              animate={isStreaming ? { opacity: [1, 0.2, 1] } : { opacity: 1 }}
+              transition={{ repeat: Infinity, duration: 0.75 }}
+            />
+            <span style={{ fontSize: 10, color: '#475569', letterSpacing: '0.1em', lineHeight: 1.3 }}>
+              {statusText}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Right: Chat Panel ── */}
+      <div style={{
+        flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden',
+      }}>
+
+        {/* Chat header */}
+        <div style={{
+          padding: '14px 24px',
+          borderBottom: '1px solid #0f172a',
+          display: 'flex', alignItems: 'center', gap: 10,
+          background: 'rgba(2, 6, 23, 0.8)',
+        }}>
+          <span style={{ color: '#334155', fontSize: 11, letterSpacing: '0.05em' }}>MODEL</span>
+          <span style={{
+            background: 'rgba(124, 58, 237, 0.1)',
+            border: '1px solid rgba(124, 58, 237, 0.25)',
+            color: '#a78bfa',
+            fontSize: 11, padding: '3px 11px', borderRadius: 999,
+            fontWeight: 600, letterSpacing: '0.04em',
+          }}>
+            openai/gpt-oss-120b · Groq
+          </span>
+          <div style={{ flex: 1 }} />
+          <span style={{ color: '#1e293b', fontSize: 11 }}>
+            {messages.filter(m => m.role === 'user').length} queries
+          </span>
+        </div>
+
+        {/* Messages */}
+        <div style={{
+          flex: 1, overflowY: 'auto', padding: '28px 28px 12px',
+        }}>
+          <AnimatePresence>
+            {messages.map(msg => <ChatMessage key={msg.id} message={msg} />)}
+          </AnimatePresence>
+          {isStreaming && <TypingIndicator />}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Input */}
+        <div style={{
+          padding: '14px 24px 18px',
+          borderTop: '1px solid #0f172a',
+          background: 'rgba(2, 6, 23, 0.9)',
+        }}>
+          <form onSubmit={handleSubmit} style={{ display: 'flex', gap: 10 }}>
+            <input
+              ref={inputRef}
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              disabled={isStreaming}
+              placeholder="Send a message to the brain..."
+              style={{
+                flex: 1,
+                background: 'rgba(7, 15, 35, 0.9)',
+                border: '1px solid #1e293b',
+                borderRadius: 12,
+                padding: '11px 16px',
+                color: '#e2e8f0',
+                fontSize: 14,
+                outline: 'none',
+                fontFamily: 'Inter, system-ui, sans-serif',
+                transition: 'border-color 0.2s',
+              }}
+              onFocus={e => (e.target.style.borderColor = '#4f46e580')}
+              onBlur={e  => (e.target.style.borderColor = '#1e293b')}
+            />
+            <motion.button
+              type="submit"
+              disabled={!input.trim() || isStreaming}
+              whileHover={input.trim() && !isStreaming ? { scale: 1.03 } : {}}
+              whileTap={input.trim() && !isStreaming ? { scale: 0.97 } : {}}
+              style={{
+                background: input.trim() && !isStreaming
+                  ? 'linear-gradient(135deg, #4f46e5, #7c3aed)'
+                  : '#0f172a',
+                border: '1px solid',
+                borderColor: input.trim() && !isStreaming ? 'transparent' : '#1e293b',
+                borderRadius: 12,
+                padding: '0 20px',
+                color: input.trim() && !isStreaming ? '#fff' : '#334155',
+                cursor: input.trim() && !isStreaming ? 'pointer' : 'not-allowed',
+                display: 'flex', alignItems: 'center', gap: 7,
+                fontSize: 13, fontWeight: 600,
+                fontFamily: 'Inter, system-ui, sans-serif',
+                minWidth: 88, justifyContent: 'center',
+                transition: 'all 0.2s',
+                boxShadow: input.trim() && !isStreaming ? '0 0 16px rgba(79,70,229,0.35)' : 'none',
+              }}
+            >
+              <Send size={14} />
+              Send
+            </motion.button>
+          </form>
+
+          <p style={{
+            textAlign: 'center', marginTop: 10,
+            fontSize: 10, color: '#1e293b',
+            fontFamily: 'Inter, system-ui, sans-serif',
+          }}>
+            Backend must be running ·{' '}
+            <code style={{ color: '#334155' }}>
+              cd corpus_callosum && uvicorn server:app --reload
+            </code>
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
