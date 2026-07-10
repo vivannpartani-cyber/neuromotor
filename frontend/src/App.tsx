@@ -69,7 +69,7 @@ export default function App() {
   const [mode, setMode] = useState<Mode>('chat');
   const [messages, setMessages] = useState<Message[]>([{
     id: '0', role: 'assistant',
-    content: `## Neuromotor V9 — The Neural Dev Brain\n\nThis is a **true simulation of the human brain for developers**. Each anatomical region has a real job:\n\n- 🟠 **Amygdala** — detects your stress/frustration via webcam\n- 🟣 **Hippocampus** — recalls your past sessions\n- 🔵 **Wernicke's Area** — reads and comprehends your code\n- 💙 **Parietal Lobe** — traces execution, hunts bugs\n- 🟢 **Temporal Lobe** — detects anti-patterns & security issues\n- 🟤 **Prefrontal Cortex** — plans the response architecture\n- 🔴 **Broca's Area** — writes the code and explanation\n- 🟡 **Cerebellum** — refines style and polish\n\n**Select a mode above**, then watch the brain fire in sequence.`,
+    content: `## Neuromotor V12\n\nWelcome to the volumetric Neural Dev Brain. The AI routes your prompts through 8 anatomical lobes powered by Llama 3 and Qwen.\n\n**Select a mode above** and ask me anything. Watch your webcam—if you look frustrated, the Amygdala will auto-trigger a debug cycle!`,
   }]);
 
   const [input, setInput]         = useState('');
@@ -232,7 +232,7 @@ export default function App() {
               {emotion}
             </div>
           </div>
-          <div className={`relative h-20 rounded-lg overflow-hidden border ${autoTriggered ? 'border-orange-500 shadow-[0_0_20px_#f97316]' : 'border-slate-800'} transition-all`}>
+          <div className={`relative h-36 rounded-lg overflow-hidden border ${autoTriggered ? 'border-orange-500 shadow-[0_0_20px_#f97316]' : 'border-slate-800'} transition-all`}>
             {!modelsLoaded && <div className="absolute inset-0 flex items-center justify-center text-[9px] text-slate-600">LOADING MODELS...</div>}
             <Webcam ref={webcamRef} muted videoConstraints={{ facingMode: 'user' }} style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.7 }} />
             {autoTriggered && (
