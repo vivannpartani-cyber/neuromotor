@@ -51,18 +51,26 @@ export default function Brain3D({ activeNodes, nodeLabel }: Brain3DProps) {
     const assigns: string[] = [];
 
     for (let i = 0; i < PARTICLE_COUNT; i++) {
-      // Ellipsoid brain shape
+      // Brain shape approximation (cortex focus)
       const u = Math.random(), v = Math.random();
       const theta = 2 * Math.PI * u;
       const phi = Math.acos(2 * v - 1);
-      const r = Math.cbrt(Math.random()) * 2.2;
+      
+      // Bias particles toward the outer surface (cortex) rather than solid core
+      const r = (0.6 + 0.4 * Math.cbrt(Math.random())) * 2.2;
 
-      let x = r * Math.sin(phi) * Math.cos(theta) * 0.85;
-      let y = r * Math.sin(phi) * Math.sin(theta) * 1.0;
-      let z = r * Math.cos(phi) * 1.15;
+      let x = r * Math.sin(phi) * Math.cos(theta) * 0.8;
+      let y = r * Math.sin(phi) * Math.sin(theta) * 0.9;
+      let z = r * Math.cos(phi) * 1.25; // Longer front-to-back
 
-      // Hemisphere gap
-      if (Math.abs(x) < 0.08) x += x >= 0 ? 0.08 : -0.08;
+      // Taper the frontal lobe (positive z)
+      if (z > 0) x *= (1.0 - z * 0.15);
+      
+      // Flatten the base of the brain
+      if (y < -0.2) y *= 0.6;
+
+      // Longitudinal fissure (hemisphere gap)
+      if (Math.abs(x) < 0.12) x += x >= 0 ? 0.08 : -0.08;
 
       pos[i * 3] = x; pos[i * 3 + 1] = y; pos[i * 3 + 2] = z;
 
@@ -80,11 +88,11 @@ export default function Brain3D({ activeNodes, nodeLabel }: Brain3DProps) {
 
       const baseColor = assigned !== 'generic'
         ? REGIONS[assigned].color
-        : new THREE.Color('#1e3a5f');
+        : new THREE.Color('#94a3b8'); // Gray matter color instead of deep blue
 
       col[i * 3] = baseColor.r; col[i * 3 + 1] = baseColor.g; col[i * 3 + 2] = baseColor.b;
-      opa[i] = assigned !== 'generic' ? 0.12 : 0.05;
-      siz[i] = assigned !== 'generic' ? 6 + Math.random() * 4 : 3 + Math.random() * 2;
+      opa[i] = assigned !== 'generic' ? 0.10 : 0.03;
+      siz[i] = assigned !== 'generic' ? 5 + Math.random() * 3 : 2 + Math.random() * 2;
     }
 
     const geo = new THREE.BufferGeometry();
@@ -143,15 +151,15 @@ export default function Brain3D({ activeNodes, nodeLabel }: Brain3DProps) {
       const reg = assignments[i];
       if (reg === 'generic') {
         // Update idle shimmer regardless (cheap sin)
-        alphas[i] = 0.03 + Math.sin(t * 0.4 + i * 0.002) * 0.015;
+        alphas[i] = 0.015 + Math.sin(t * 0.4 + i * 0.002) * 0.01;
         continue;
       }
       const isActive = activeNodes.has(reg);
       if (isActive) {
         // Contained glow — max 0.85, no blowout
-        alphas[i] = 0.55 + Math.sin(t * 12 + i * 0.15) * 0.3;
+        alphas[i] = 0.45 + Math.sin(t * 12 + i * 0.15) * 0.25;
       } else {
-        alphas[i] = 0.06 + Math.sin(t * 0.6 + i * 0.01) * 0.03;
+        alphas[i] = 0.03 + Math.sin(t * 0.6 + i * 0.01) * 0.02;
       }
     }
     geometry.attributes.alpha.needsUpdate = true;

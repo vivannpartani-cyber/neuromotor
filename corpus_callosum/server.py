@@ -60,8 +60,29 @@ async def chat(request: ChatRequest):
                                     repo_code += f"--- {p.relative_to(tmpdir)} ---\n{p.read_text(errors='ignore')}\n\n"
                                 except Exception:
                                     pass
+                        # ── SuperCompress API integration ──
+                        if len(repo_code) > 1000:
+                            yield f'data: {{"node": "system", "status": "compressing", "message": "Compressing context with SuperCompress..."}}\n\n'
+                            try:
+                                import httpx
+                                sc_key = "sc_live_sck_bb40cecb5cc1ee55389f807e_PFDX6qVO4-dY73vrKs03QsLy7Q2h1-aE"
+                                with httpx.Client() as client:
+                                    resp = client.post(
+                                        "https://supercompress.dev/compress",
+                                        json={"context": repo_code, "query": request.message or "Analyze this code."},
+                                        headers={"X-API-Key": sc_key},
+                                        timeout=30.0
+                                    )
+                                    if resp.status_code == 200:
+                                        data = resp.json()
+                                        repo_code = data.get("compressed_text", repo_code)
+                                        saved = data.get("tokens_saved", 0)
+                                        yield f'data: {{"node": "system", "status": "compressed", "message": "SuperCompress saved {saved} tokens."}}\n\n'
+                            except Exception as e:
+                                yield f'data: {{"node": "system", "status": "warning", "message": "SuperCompress failed. Using raw context."}}\n\n'
+
                         repo_code = repo_code[:25000]
-                        yield f'data: {{"node": "system", "status": "ingested", "message": "Repository ingested — {len(repo_code)} chars of source code."}}\n\n'
+                        yield f'data: {{"node": "system", "status": "ingested", "message": "Repository ready — {len(repo_code)} chars of source code."}}\n\n'
                 except Exception as e:
                     repo_code = f"Failed to clone repo: {e}"
                     yield f'data: {{"node": "system", "status": "error", "message": "{str(e)[:200]}"}}\n\n'
