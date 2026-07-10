@@ -32,6 +32,6 @@ CODE CONTEXT:
 Do NOT suggest fixes. Just comprehend."""
     resp = llm.invoke([
         SystemMessage(content=sys_prompt),
-        HumanMessage(content=f"User request: {state.get('user_input', '')}")
+        HumanMessage(content=f"User request: {state.get('user_input', '')[:800]}")
     ])
     return {"wernicke_out": resp.content}

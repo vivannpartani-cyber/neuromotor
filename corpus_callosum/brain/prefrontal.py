@@ -45,34 +45,23 @@ For example:
 If you do not use these exact markdown tags, the Live Sandbox will FAIL to render. Focus purely on visually stunning front-end web demos using vanilla HTML/CSS/JS. Do not write Node.js or backend code when overdrive is enabled.
 """
     
-    sys_prompt = f"""You are the Prefrontal Cortex — the planning and executive decision-making center.
-You receive inputs from the other brain regions and produce a PLAN for the final response.
+    # Cap upstream context to avoid blowing token budget
+    T = 500
+    w = (wernicke  or '')[:T]
+    p = (parietal  or '')[:T]
+    t = (temporal  or '')[:T]
+    mem = str(state.get('hippocampus_report', {}).get('memory_summary', ''))[:200]
 
-Mode: {mode.upper()}
+    sys_prompt = f"""You are the Prefrontal Cortex — planning center.
+Produce a SHORT structured plan (bullet points, max 200 words) for Broca to execute.
 
-What Wernicke's comprehended:
-{wernicke}
-
-What Parietal found (logic/bugs):
-{parietal}
-
-What Temporal found (patterns):
-{temporal}
-
-Memory from Hippocampus:
-{state.get('hippocampus_report', {}).get('memory_summary', 'No prior context.')}
-
-Biometric state (Amygdala):
-Emotion: {state.get('emotion_state', 'neutral')} | Threat: {state.get('amygdala_brief', {}).get('threat_level', 0)}/10
-
-Based on all the above, produce a STRUCTURED PLAN (not the final answer):
-- What the final response should accomplish
-- What sections or steps it should include
-- What code should be written (if any)
-- The tone/depth to use (adjust for frustration level)
+MODE: {mode.upper()} | EMOTION: {state.get('emotion_state','neutral')} | THREAT: {state.get('amygdala_brief',{}).get('threat_level',0)}/10
+MEMORY: {mem}
+COMPREHENSION: {w}
+LOGIC: {p}
+PATTERNS: {t}
 {overdrive_prompt}
-
-This plan will be handed to Broca's Area for execution."""
+This plan goes to Broca's Area. Be concise."""
     resp = llm.invoke([
         SystemMessage(content=sys_prompt),
         HumanMessage(content=f"User request: {state.get('user_input', '')}")

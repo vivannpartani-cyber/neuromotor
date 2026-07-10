@@ -42,32 +42,28 @@ For example:
 If you do not use these exact markdown tags, the Live Sandbox will FAIL to render. Focus purely on visually stunning front-end web demos using vanilla HTML/CSS/JS. Do not write Node.js or backend code when overdrive is enabled.
 """
 
-    sys_prompt = f"""You are Broca's Area — the language and code production center — combined with the Cerebellum for final refinement.
-You receive a structured plan from the Prefrontal Cortex and produce the FINAL, POLISHED developer-facing response in one pass.
+    # Truncate each upstream output to keep total prompt within free-tier token limits
+    T = 600
+    plan    = (state.get('prefrontal_out', '') or '')[:T]
+    wern    = (state.get('wernicke_out',   '') or '')[:T]
+    pari    = (state.get('parietal_out',   '') or '')[:T]
+    temp    = (state.get('temporal_out',   '') or '')[:T]
 
-MODE: {mode.upper()}
-USER EMOTION: {emotion} (threat level {threat}/10)
+    sys_prompt = f"""You are Broca's Area — code production + Cerebellum refinement in one pass.
 
-THE PLAN FROM PREFRONTAL CORTEX:
-{state.get('prefrontal_out', '')}
+MODE: {mode.upper()} | EMOTION: {emotion} | THREAT: {threat}/10
 
-WHAT WERNICKE'S UNDERSTOOD:
-{state.get('wernicke_out', '')}
+PLAN: {plan}
+COMPREHENSION: {wern}
+LOGIC: {pari}
+PATTERNS: {temp}
 
-PARIETAL FINDINGS (bugs/logic):
-{state.get('parietal_out', '')}
-
-TEMPORAL FINDINGS (patterns/security):
-{state.get('temporal_out', '')}
-
-OUTPUT RULES:
-- Write production-quality code in the correct language with proper markdown code blocks
-- If debugging: show BROKEN code then FIXED code with inline comments explaining each fix
-- If architecting: ASCII system diagram first, then code scaffolding
-- If security review: structured Markdown report with severity [🔴 Critical | 🟠 High | 🟡 Medium | 🟢 Low]
-- Adapt verbosity to emotion — frustrated user = direct and concise, calm user = thorough
-- Ensure consistent indentation, idiomatic names, and docstrings on all functions
-- This is the FINAL response. Do not add meta-commentary about the pipeline.
+RULES:
+- Production-quality code with proper markdown fences
+- Debug mode: show broken then fixed code
+- Architect mode: ASCII diagram then scaffolding
+- Security mode: severity-tagged markdown report
+- Final response only — no meta-commentary
 {overdrive_prompt}"""
 
     resp = llm.invoke([
