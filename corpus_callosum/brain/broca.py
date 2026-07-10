@@ -28,7 +28,18 @@ def broca_node(state: AgentState) -> dict:
         overdrive_prompt = """
 [HYPER-FOCUS OVERDRIVE ENABLED]
 Provide EXTREMELY verbose, deep, step-by-step logic.
-IMPORTANT: You MUST write complete, self-contained `html`, `css`, and `javascript` code blocks that can run independently in an iframe. Do NOT write react or backend code when overdrive is enabled—focus purely on visually stunning front-end web demos using vanilla HTML/CSS/JS. Ensure all CSS and JS relies only on web standards.
+IMPORTANT: You MUST write complete, self-contained code blocks using STRICT Markdown formatting with the exact tags: `html`, `css`, and `javascript`. 
+For example:
+```html
+<!-- your html -->
+```
+```css
+/* your css */
+```
+```javascript
+// your js
+```
+If you do not use these exact markdown tags, the Live Sandbox will FAIL to render. Focus purely on visually stunning front-end web demos using vanilla HTML/CSS/JS. Do not write Node.js or backend code when overdrive is enabled.
 """
 
     sys_prompt = f"""You are Broca's Area — the language and code production center — combined with the Cerebellum for final refinement.

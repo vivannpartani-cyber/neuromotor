@@ -27,7 +27,19 @@ def prefrontal_node(state: AgentState) -> dict:
     if overdrive:
         overdrive_prompt = """
 [HYPER-FOCUS OVERDRIVE ENABLED]
-Plan an EXTREMELY detailed, step-by-step architecture. Instruct Broca's area to write a fully functional, self-contained HTML/CSS/JS frontend application that can be run in an iframe sandbox. Do NOT plan for a backend. Focus purely on a stunning UI using vanilla web tech.
+Provide EXTREMELY verbose, deep, step-by-step logic.
+IMPORTANT: You MUST plan for complete, self-contained code blocks using STRICT Markdown formatting with the exact tags: `html`, `css`, and `javascript`. 
+For example:
+```html
+<!-- your html -->
+```
+```css
+/* your css */
+```
+```javascript
+// your js
+```
+If you do not use these exact markdown tags, the Live Sandbox will FAIL to render. Focus purely on visually stunning front-end web demos using vanilla HTML/CSS/JS. Do not write Node.js or backend code when overdrive is enabled.
 """
     
     sys_prompt = f"""You are the Prefrontal Cortex — the planning and executive decision-making center.
