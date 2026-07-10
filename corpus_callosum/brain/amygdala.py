@@ -11,7 +11,7 @@ import json
 from brain.state import AgentState
 
 def amygdala_node(state: AgentState) -> dict:
-    llm = ChatOpenAI(model="llama-3.3-70b-versatile", temperature=0, base_url="https://api.groq.com/openai/v1", api_key=os.getenv("GROQ_API_KEY"))
+    llm = ChatOpenAI(model="llama-3.1-8b-instant", temperature=0, base_url="https://api.groq.com/openai/v1", api_key=os.getenv("GROQ_API_KEY"))
     
     physical_emotion = state.get("emotion_state") or "neutral"
     

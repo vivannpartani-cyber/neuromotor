@@ -107,7 +107,7 @@ async def chat(request: ChatRequest):
                     label = NODE_LABELS.get(node_name, node_name)
 
                     if node_name == "cerebellum":
-                        final = node_updates.get("final_response", "")
+                        final = node_updates.get("final_response", node_updates.get("broca_out", ""))
                         yield f'data: {{"node": "cerebellum", "label": "{label}", "status": "done"}}\n\n'
                         yield f'data: {{"node": "end", "response": {json.dumps(final)}}}\n\n'
                         return

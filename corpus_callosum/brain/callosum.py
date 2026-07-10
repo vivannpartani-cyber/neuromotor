@@ -1,16 +1,18 @@
 """
-Corpus Callosum — The Neural Orchestrator (V9)
+Corpus Callosum — The Neural Orchestrator (V9.1)
 
-Implements a true anatomical brain graph:
-  Amygdala → Hippocampus → Wernicke's
-                              ↓
-                    [Parallel: Parietal + Temporal]  ← mode-dependent
-                              ↓
-                          Prefrontal
-                              ↓
-                           Broca's
-                              ↓
-                          Cerebellum → END
+Firing sequence (6 LLM calls instead of 8):
+  Amygdala [8b]   → cheap threat/emotion classification
+  Hippocampus     → memory lookup (no LLM, pure API)
+  Wernicke's [8b] → cheap comprehension summary
+      ↓
+  Parietal [70b] ←→ Temporal [70b]   ← true parallel
+      ↓
+  Prefrontal [70b] → planning
+      ↓
+  Broca [70b]      → generation + refinement (merged with Cerebellum)
+      ↓  
+  END
 """
 from langgraph.graph import StateGraph, END
 from brain.state import AgentState
@@ -25,21 +27,11 @@ from brain.cerebellum import cerebellum_node
 
 
 def route_after_wernicke(state: AgentState):
-    """
-    Intelligent routing: which parallel lobes fire depends on the mode.
-    - debug     → parietal (logic tracing) + temporal (patterns)
-    - security  → temporal (patterns/anti-patterns)
-    - architect → parietal (structure) + temporal (patterns)
-    - chat      → parietal + temporal (always both for rich context)
-    """
-    mode = state.get("mode", "chat")
-    # All modes currently use both; this is extensible
     return ["parietal", "temporal"]
 
 
 workflow = StateGraph(AgentState)
 
-# Register all nodes
 workflow.add_node("amygdala",    amygdala_node)
 workflow.add_node("hippocampus", hippocampus_node)
 workflow.add_node("wernicke",    wernicke_node)
@@ -47,25 +39,21 @@ workflow.add_node("parietal",    parietal_node)
 workflow.add_node("temporal",    temporal_node)
 workflow.add_node("prefrontal",  prefrontal_node)
 workflow.add_node("broca",       broca_node)
+# Cerebellum kept as a pass-through node so the brain animation still fires it
 workflow.add_node("cerebellum",  cerebellum_node)
 
-# Wire the graph
 workflow.set_entry_point("amygdala")
-workflow.add_edge("amygdala", "hippocampus")
+workflow.add_edge("amygdala",    "hippocampus")
 workflow.add_edge("hippocampus", "wernicke")
 
-# Wernicke fans out to Parietal + Temporal in parallel
 workflow.add_conditional_edges(
     "wernicke",
     route_after_wernicke,
     ["parietal", "temporal"]
 )
 
-# Both parallel lobes converge on Prefrontal
-workflow.add_edge("parietal", "prefrontal")
-workflow.add_edge("temporal", "prefrontal")
-
-# Sequential: Prefrontal → Broca's → Cerebellum → END
+workflow.add_edge("parietal",   "prefrontal")
+workflow.add_edge("temporal",   "prefrontal")
 workflow.add_edge("prefrontal", "broca")
 workflow.add_edge("broca",      "cerebellum")
 workflow.add_edge("cerebellum", END)

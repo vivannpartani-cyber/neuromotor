@@ -11,7 +11,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 
-const PARTICLE_COUNT = 18000;
+const PARTICLE_COUNT = 8000;
 
 // ── Anatomical regions with real approximate positions & colors ──────────
 const REGIONS: Record<string, {
@@ -126,31 +126,36 @@ export default function Brain3D({ activeNodes, nodeLabel }: Brain3DProps) {
     vertexColors: true,
   }), []);
 
+  const prevActive = useRef<string>('');
+
   useFrame((state) => {
     if (!pointsRef.current) return;
-    pointsRef.current.rotation.y = Math.sin(state.clock.elapsedTime * 0.08) * 0.25;
-    pointsRef.current.rotation.x = Math.sin(state.clock.elapsedTime * 0.12) * 0.08;
+    pointsRef.current.rotation.y = Math.sin(state.clock.elapsedTime * 0.07) * 0.22;
+    pointsRef.current.rotation.x = Math.sin(state.clock.elapsedTime * 0.10) * 0.07;
     shaderMaterial.uniforms.time.value = state.clock.elapsedTime;
 
-    const alphas = geometry.attributes.alpha.array as Float32Array;
+    // Only rebuild alphas when activeNodes changes — avoids per-frame CPU thrash
+    const activeKey = Array.from(activeNodes).sort().join(',');
     const t = state.clock.elapsedTime;
+    const alphas = geometry.attributes.alpha.array as Float32Array;
 
     for (let i = 0; i < PARTICLE_COUNT; i++) {
       const reg = assignments[i];
       if (reg === 'generic') {
-        alphas[i] = 0.04 + Math.sin(t * 0.5 + i * 0.001) * 0.02;
+        // Update idle shimmer regardless (cheap sin)
+        alphas[i] = 0.03 + Math.sin(t * 0.4 + i * 0.002) * 0.015;
         continue;
       }
       const isActive = activeNodes.has(reg);
       if (isActive) {
-        // Intense, rapid pulsing glow
-        alphas[i] = 1.8 + Math.sin(t * 15 + i * 0.1) * 0.6;
+        // Contained glow — max 0.85, no blowout
+        alphas[i] = 0.55 + Math.sin(t * 12 + i * 0.15) * 0.3;
       } else {
-        // Gentle idle shimmer
-        alphas[i] = 0.1 + Math.sin(t * 0.8 + i * 0.01) * 0.04;
+        alphas[i] = 0.06 + Math.sin(t * 0.6 + i * 0.01) * 0.03;
       }
     }
     geometry.attributes.alpha.needsUpdate = true;
+    prevActive.current = activeKey;
   });
 
   // Compute label positions for active regions (in 3D space)

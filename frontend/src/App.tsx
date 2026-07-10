@@ -124,7 +124,7 @@ export default function App() {
         }
       }
     }
-    setTimeout(detectEmotion, 600);
+    setTimeout(detectEmotion, 1500);
   }, [modelsLoaded, isStreaming]);
 
   useEffect(() => { if (modelsLoaded) detectEmotion(); }, [modelsLoaded, detectEmotion]);

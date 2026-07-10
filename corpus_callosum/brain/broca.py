@@ -1,7 +1,8 @@
 """
-Broca's Area — Code & Language Generation
-Executes the Prefrontal's plan. Writes the actual code and explanation.
-This is the OUTPUT generator — fires last in the cognitive chain.
+Broca's Area — Code Generation + Cerebellum Refinement (merged)
+
+Executes the Prefrontal's plan AND does the final style polish in one call.
+Merging these two saves one full LLM round-trip per request.
 """
 import os
 from langchain_openai import ChatOpenAI
@@ -9,7 +10,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from brain.state import AgentState
 
 LLM = lambda: ChatOpenAI(
-    model="llama-3.3-70b-versatile",
+    model="openai/gpt-oss-20b",
     temperature=0.1,
     base_url="https://api.groq.com/openai/v1",
     api_key=os.getenv("GROQ_API_KEY")
@@ -17,8 +18,15 @@ LLM = lambda: ChatOpenAI(
 
 def broca_node(state: AgentState) -> dict:
     llm = LLM()
-    sys_prompt = f"""You are Broca's Area — the language and code production center of the brain.
-You receive a structured plan from the Prefrontal Cortex and EXECUTE it into the final developer-facing response.
+    mode = state.get("mode", "chat")
+    emotion = state.get("emotion_state", "neutral")
+    threat = state.get("amygdala_brief", {}).get("threat_level", 0)
+
+    sys_prompt = f"""You are Broca's Area — the language and code production center — combined with the Cerebellum for final refinement.
+You receive a structured plan from the Prefrontal Cortex and produce the FINAL, POLISHED developer-facing response in one pass.
+
+MODE: {mode.upper()}
+USER EMOTION: {emotion} (threat level {threat}/10)
 
 THE PLAN FROM PREFRONTAL CORTEX:
 {state.get('prefrontal_out', '')}
@@ -26,26 +34,23 @@ THE PLAN FROM PREFRONTAL CORTEX:
 WHAT WERNICKE'S UNDERSTOOD:
 {state.get('wernicke_out', '')}
 
-WHAT PARIETAL FOUND (bugs/logic):
+PARIETAL FINDINGS (bugs/logic):
 {state.get('parietal_out', '')}
 
-WHAT TEMPORAL FOUND (patterns):
+TEMPORAL FINDINGS (patterns/security):
 {state.get('temporal_out', '')}
 
-USER EMOTION (from Amygdala): {state.get('emotion_state', 'neutral')}
+OUTPUT RULES:
+- Write production-quality code in the correct language with proper markdown code blocks
+- If debugging: show BROKEN code then FIXED code with inline comments explaining each fix
+- If architecting: ASCII system diagram first, then code scaffolding
+- If security review: structured Markdown report with severity [🔴 Critical | 🟠 High | 🟡 Medium | 🟢 Low]
+- Adapt verbosity to emotion — frustrated user = direct and concise, calm user = thorough
+- Ensure consistent indentation, idiomatic names, and docstrings on all functions
+- This is the FINAL response. Do not add meta-commentary about the pipeline."""
 
-INSTRUCTIONS:
-- Write clear, production-quality code in the appropriate language
-- Use markdown formatting with proper code blocks (```language ... ```)
-- If debugging: show the BROKEN version, then the FIXED version with inline comments
-- If architecting: produce a clear system diagram in ASCII or text, then code scaffolding
-- If reviewing: produce a structured report with severity ratings [🔴 Critical | 🟠 High | 🟡 Medium | 🟢 Low]
-- Adapt verbosity to the user's emotional state — if frustrated, be direct and concise
-- End with a "Cerebellum will refine the code style" note if code was generated
-
-This is the FINAL response the user will read."""
     resp = llm.invoke([
         SystemMessage(content=sys_prompt),
         HumanMessage(content=f"Original request: {state.get('user_input', '')}")
     ])
-    return {"broca_out": resp.content}
+    return {"final_response": resp.content, "broca_out": resp.content}
