@@ -1,76 +1,73 @@
 """
-The LangGraph Orchestrator
-Now implements Parallel Hidden Layers for true Neural Network execution.
+Corpus Callosum — The Neural Orchestrator (V9)
+
+Implements a true anatomical brain graph:
+  Amygdala → Hippocampus → Wernicke's
+                              ↓
+                    [Parallel: Parietal + Temporal]  ← mode-dependent
+                              ↓
+                          Prefrontal
+                              ↓
+                           Broca's
+                              ↓
+                          Cerebellum → END
 """
 from langgraph.graph import StateGraph, END
 from brain.state import AgentState
 from brain.amygdala import amygdala_node
 from brain.hippocampus import hippocampus_node
-from brain.syntax import syntax_node
-from brain.logic import logic_node
-from brain.security import security_node
-from brain.frontal_lobe import frontal_lobe_node
+from brain.wernicke import wernicke_node
+from brain.parietal import parietal_node
+from brain.temporal import temporal_node
+from brain.prefrontal import prefrontal_node
+from brain.broca import broca_node
+from brain.cerebellum import cerebellum_node
 
-def route_amygdala(state: AgentState):
-    """
-    Decides whether to do a memory retrieval or go straight to parallel execution.
-    If the Amygdala flags threat > 8, we skip memory and act immediately.
-    """
-    threat = state.get("amygdala_brief", {}).get("threat_level", 0)
-    if threat >= 8:
-        return "syntax" # Skip memory, go straight to parallel
-    return "hippocampus"
 
-# Initialize graph
+def route_after_wernicke(state: AgentState):
+    """
+    Intelligent routing: which parallel lobes fire depends on the mode.
+    - debug     → parietal (logic tracing) + temporal (patterns)
+    - security  → temporal (patterns/anti-patterns)
+    - architect → parietal (structure) + temporal (patterns)
+    - chat      → parietal + temporal (always both for rich context)
+    """
+    mode = state.get("mode", "chat")
+    # All modes currently use both; this is extensible
+    return ["parietal", "temporal"]
+
+
 workflow = StateGraph(AgentState)
 
-# Add Nodes
-workflow.add_node("amygdala", amygdala_node)
+# Register all nodes
+workflow.add_node("amygdala",    amygdala_node)
 workflow.add_node("hippocampus", hippocampus_node)
+workflow.add_node("wernicke",    wernicke_node)
+workflow.add_node("parietal",    parietal_node)
+workflow.add_node("temporal",    temporal_node)
+workflow.add_node("prefrontal",  prefrontal_node)
+workflow.add_node("broca",       broca_node)
+workflow.add_node("cerebellum",  cerebellum_node)
 
-# Add Parallel Nodes
-workflow.add_node("syntax", syntax_node)
-workflow.add_node("logic", logic_node)
-workflow.add_node("security", security_node)
-
-workflow.add_node("frontal_lobe", frontal_lobe_node)
-
-# Define Edges
+# Wire the graph
 workflow.set_entry_point("amygdala")
-workflow.add_conditional_edges("amygdala", route_amygdala, {
-    "hippocampus": "hippocampus",
-    "syntax": "syntax" # Fallback mapping if urgent
-})
+workflow.add_edge("amygdala", "hippocampus")
+workflow.add_edge("hippocampus", "wernicke")
 
-# Fan out from hippocampus to parallel nodes
-workflow.add_edge("hippocampus", "syntax")
-workflow.add_edge("hippocampus", "logic")
-workflow.add_edge("hippocampus", "security")
+# Wernicke fans out to Parietal + Temporal in parallel
+workflow.add_conditional_edges(
+    "wernicke",
+    route_after_wernicke,
+    ["parietal", "temporal"]
+)
 
-# If urgent branch was taken, we still need logic and security to fire. 
-# LangGraph allows conditional edges to return lists of nodes to fan out!
-# Wait, for simplicity, I'll update route_amygdala to return a list of parallel nodes.
+# Both parallel lobes converge on Prefrontal
+workflow.add_edge("parietal", "prefrontal")
+workflow.add_edge("temporal", "prefrontal")
 
-def route_amygdala_parallel(state: AgentState):
-    threat = state.get("amygdala_brief", {}).get("threat_level", 0)
-    if threat >= 8:
-        return ["syntax", "logic", "security"]
-    return ["hippocampus"]
-
-# Update conditional edges
-workflow.add_conditional_edges("amygdala", route_amygdala_parallel, ["hippocampus", "syntax", "logic", "security"])
-
-# Fan out from hippocampus
-def fan_out_from_hippo(state: AgentState):
-    return ["syntax", "logic", "security"]
-
-workflow.add_conditional_edges("hippocampus", fan_out_from_hippo, ["syntax", "logic", "security"])
-
-# Fan in to Frontal Lobe
-workflow.add_edge("syntax", "frontal_lobe")
-workflow.add_edge("logic", "frontal_lobe")
-workflow.add_edge("security", "frontal_lobe")
-
-workflow.add_edge("frontal_lobe", END)
+# Sequential: Prefrontal → Broca's → Cerebellum → END
+workflow.add_edge("prefrontal", "broca")
+workflow.add_edge("broca",      "cerebellum")
+workflow.add_edge("cerebellum", END)
 
 corpus_callosum = workflow.compile()

@@ -1,9 +1,6 @@
 """
-Corpus Callosum — FastAPI SSE Server
-
-Run with:
-    cd corpus_callosum
-    python3 -m uvicorn server:app --reload --port 8000
+Corpus Callosum — FastAPI SSE Server (V9)
+Streams each anatomical brain region's activation to the frontend in real time.
 """
 import os
 import json
@@ -19,20 +16,22 @@ from pathlib import Path
 
 load_dotenv()
 
-app = FastAPI(title="Corpus Callosum API", version="2.0.0")
+app = FastAPI(title="Neuromotor API", version="9.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 
 class ChatRequest(BaseModel):
-    message: str | None = None
+    message:      str | None = None
     emotion_state: str | None = None
-    editor_code: str | None = None
-    repo_url: str | None = None
+    editor_code:  str | None = None
+    repo_url:     str | None = None
+    mode:         str | None = "chat"   # chat | debug | architect | security
 
 
 @app.get("/health")
 async def health():
-    return {"status": "online", "model": "llama-3.3-70b-versatile", "backend": "Groq"}
+    return {"status": "online", "version": "9.0", "model": "llama-3.3-70b-versatile"}
+
 
 @app.post("/chat")
 async def chat(request: ChatRequest):
@@ -40,10 +39,10 @@ async def chat(request: ChatRequest):
         try:
             from brain.callosum import corpus_callosum
 
-            # ── Repo ingestion ──────────────────────────────────────────
+            # ── Repo ingestion (security/review mode) ──────────────────
             repo_code = ""
             if request.repo_url:
-                yield f'data: {{"node": "system", "status": "cloning", "message": "Cloning {request.repo_url}..."}}\n\n'
+                yield f'data: {{"node": "system", "status": "cloning", "message": "Cloning repository..."}}\n\n'
                 try:
                     with tempfile.TemporaryDirectory() as tmpdir:
                         result = subprocess.run(
@@ -53,71 +52,78 @@ async def chat(request: ChatRequest):
                         if result.returncode != 0:
                             raise RuntimeError(result.stderr.decode()[:300])
 
-                        for ext in [".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".java", ".rs"]:
+                        for ext in [".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".java", ".rs", ".cpp", ".c"]:
                             for p in Path(tmpdir).rglob(f"*{ext}"):
-                                if any(skip in str(p) for skip in ["node_modules", "dist", "build", ".git", "__pycache__"]):
+                                if any(s in str(p) for s in ["node_modules", "dist", "build", ".git", "__pycache__", "vendor"]):
                                     continue
                                 try:
                                     repo_code += f"--- {p.relative_to(tmpdir)} ---\n{p.read_text(errors='ignore')}\n\n"
                                 except Exception:
                                     pass
-
-                        # Cap at 25k chars to stay within model context
                         repo_code = repo_code[:25000]
-                        yield f'data: {{"node": "system", "status": "ingested", "message": "Ingested {len(repo_code)} chars of source code."}}\n\n'
+                        yield f'data: {{"node": "system", "status": "ingested", "message": "Repository ingested — {len(repo_code)} chars of source code."}}\n\n'
                 except Exception as e:
                     repo_code = f"Failed to clone repo: {e}"
                     yield f'data: {{"node": "system", "status": "error", "message": "{str(e)[:200]}"}}\n\n'
 
-            # ── LangGraph run ───────────────────────────────────────────
+            # ── Build initial state ─────────────────────────────────────
             initial_state = {
-                "user_input":         request.message or "Perform a full code review.",
+                "user_input":         request.message or "Analyze this code.",
                 "emotion_state":      request.emotion_state or "neutral",
                 "editor_code":        request.editor_code or "",
                 "repo_code":          repo_code,
+                "mode":               request.mode or "chat",
                 "messages":           [],
                 "context":            [],
                 "is_urgent":          False,
                 "final_response":     "",
                 "amygdala_brief":     {},
                 "hippocampus_report": {},
+                "wernicke_out":       "",
+                "parietal_out":       "",
+                "temporal_out":       "",
+                "prefrontal_out":     "",
+                "broca_out":          "",
             }
 
-            final_response = ""
+            # ── Stream graph events ─────────────────────────────────────
+            # Map node names to human-readable labels for the frontend
+            NODE_LABELS = {
+                "amygdala":    "Amygdala · Threat Detection",
+                "hippocampus": "Hippocampus · Memory Recall",
+                "wernicke":    "Wernicke's Area · Comprehension",
+                "parietal":    "Parietal Lobe · Logic Tracing",
+                "temporal":    "Temporal Lobe · Pattern Recognition",
+                "prefrontal":  "Prefrontal Cortex · Planning",
+                "broca":       "Broca's Area · Code Generation",
+                "cerebellum":  "Cerebellum · Refinement",
+            }
 
             for event in corpus_callosum.stream(initial_state):
-                # Each event is {node_name: node_output_dict}
                 for node_name, node_updates in event.items():
                     if not isinstance(node_updates, dict):
                         continue
 
-                    if node_name == "amygdala":
+                    label = NODE_LABELS.get(node_name, node_name)
+
+                    if node_name == "cerebellum":
+                        final = node_updates.get("final_response", "")
+                        yield f'data: {{"node": "cerebellum", "label": "{label}", "status": "done"}}\n\n'
+                        yield f'data: {{"node": "end", "response": {json.dumps(final)}}}\n\n'
+                        return
+
+                    elif node_name == "amygdala":
                         brief = node_updates.get("amygdala_brief", {})
-                        yield f'data: {json.dumps({"node": "amygdala", "status": "done", "data": brief})}\n\n'
+                        yield f'data: {json.dumps({"node": node_name, "label": label, "status": "done", "threat": brief.get("threat_level", 0), "tone": brief.get("emotional_tone", "neutral")})}\n\n'
 
                     elif node_name == "hippocampus":
                         report = node_updates.get("hippocampus_report", {})
-                        yield f'data: {json.dumps({"node": "hippocampus", "status": "done", "data": report})}\n\n'
+                        yield f'data: {json.dumps({"node": node_name, "label": label, "status": "done", "memories": report.get("memories_found", 0)})}\n\n'
 
-                    elif node_name == "syntax":
-                        yield f'data: {{"node": "syntax", "status": "done"}}\n\n'
+                    else:
+                        yield f'data: {{"node": "{node_name}", "label": {json.dumps(label)}, "status": "done"}}\n\n'
 
-                    elif node_name == "logic":
-                        yield f'data: {{"node": "logic", "status": "done"}}\n\n'
-
-                    elif node_name == "security":
-                        yield f'data: {{"node": "security", "status": "done"}}\n\n'
-
-                    elif node_name == "frontal_lobe":
-                        resp = node_updates.get("frontal_lobe_response", "")
-                        final_response = resp
-                        yield f'data: {{"node": "frontal_lobe", "status": "done"}}\n\n'
-                        yield f'data: {{"node": "end", "response": {json.dumps(resp)}}}\n\n'
-                        return  # done — stop streaming
-
-            # Fallback if frontal_lobe never fired
-            if not final_response:
-                yield f'data: {{"node": "end", "response": "The neural network completed processing but produced no output. This may be a graph routing issue."}}\n\n'
+            yield f'data: {{"node": "end", "response": "The neural network completed but produced no output."}}\n\n'
 
         except Exception as exc:
             traceback.print_exc()
