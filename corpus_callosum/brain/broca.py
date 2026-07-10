@@ -21,6 +21,15 @@ def broca_node(state: AgentState) -> dict:
     mode = state.get("mode", "chat")
     emotion = state.get("emotion_state", "neutral")
     threat = state.get("amygdala_brief", {}).get("threat_level", 0)
+    overdrive = state.get("overdrive", False)
+
+    overdrive_prompt = ""
+    if overdrive:
+        overdrive_prompt = """
+[HYPER-FOCUS OVERDRIVE ENABLED]
+Provide EXTREMELY verbose, deep, step-by-step logic.
+IMPORTANT: You MUST write complete, self-contained `html`, `css`, and `javascript` code blocks that can run independently in an iframe. Do NOT write react or backend code when overdrive is enabled—focus purely on visually stunning front-end web demos using vanilla HTML/CSS/JS. Ensure all CSS and JS relies only on web standards.
+"""
 
     sys_prompt = f"""You are Broca's Area — the language and code production center — combined with the Cerebellum for final refinement.
 You receive a structured plan from the Prefrontal Cortex and produce the FINAL, POLISHED developer-facing response in one pass.
@@ -47,7 +56,8 @@ OUTPUT RULES:
 - If security review: structured Markdown report with severity [🔴 Critical | 🟠 High | 🟡 Medium | 🟢 Low]
 - Adapt verbosity to emotion — frustrated user = direct and concise, calm user = thorough
 - Ensure consistent indentation, idiomatic names, and docstrings on all functions
-- This is the FINAL response. Do not add meta-commentary about the pipeline."""
+- This is the FINAL response. Do not add meta-commentary about the pipeline.
+{overdrive_prompt}"""
 
     resp = llm.invoke([
         SystemMessage(content=sys_prompt),

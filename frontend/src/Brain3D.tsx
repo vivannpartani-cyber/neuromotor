@@ -84,9 +84,10 @@ function getBrainPoint(u: number, v: number, part: string): THREE.Vector3 {
 interface Brain3DProps {
   activeNodes: Set<string>;
   nodeLabel?: string;
+  overdrive?: boolean;
 }
 
-export default function Brain3D({ activeNodes }: Brain3DProps) {
+export default function Brain3D({ activeNodes, overdrive = false }: Brain3DProps) {
   const linesRef = useRef<THREE.LineSegments>(null!);
   const coreRef = useRef<THREE.Mesh>(null!);
 
@@ -106,6 +107,7 @@ export default function Brain3D({ activeNodes }: Brain3DProps) {
     coreGeo.computeVertexNormals();
 
     const coreMat = new THREE.ShaderMaterial({
+      uniforms: { overdrive: { value: 0.0 } },
       vertexShader: `
         varying vec3 vNormal;
         varying vec3 vViewPosition;
@@ -117,6 +119,7 @@ export default function Brain3D({ activeNodes }: Brain3DProps) {
         }
       `,
       fragmentShader: `
+        uniform float overdrive;
         varying vec3 vNormal;
         varying vec3 vViewPosition;
         void main() {
@@ -126,8 +129,8 @@ export default function Brain3D({ activeNodes }: Brain3DProps) {
           float rim = 1.0 - max(dot(viewDir, normal), 0.0);
           rim = smoothstep(0.5, 1.0, rim);
           
-          vec3 coreColor = vec3(0.0, 0.05, 0.2); 
-          vec3 rimColor = vec3(0.0, 0.5, 1.0);   
+          vec3 coreColor = mix(vec3(0.0, 0.05, 0.2), vec3(0.15, 0.0, 0.05), overdrive); 
+          vec3 rimColor = mix(vec3(0.0, 0.5, 1.0), vec3(1.0, 0.0, 0.3), overdrive);   
           
           vec3 finalColor = coreColor + rimColor * rim * 1.5;
           gl_FragColor = vec4(finalColor, 0.4 + rim * 0.4);
@@ -199,7 +202,7 @@ export default function Brain3D({ activeNodes }: Brain3DProps) {
     lnGeo.setAttribute('isActive', new THREE.BufferAttribute(actArr, 1));
 
     const lnMat = new THREE.ShaderMaterial({
-      uniforms: { time: { value: 0 } },
+      uniforms: { time: { value: 0 }, overdrive: { value: 0.0 } },
       vertexShader: `
         attribute float uvX;
         attribute float pathId;
@@ -222,22 +225,23 @@ export default function Brain3D({ activeNodes }: Brain3DProps) {
       `,
       fragmentShader: `
         uniform float time;
+        uniform float overdrive;
         varying float vUv;
         varying float vPathId;
         varying float vIsActive;
         varying vec3 vColor;
         
         void main() {
-          vec3 inactiveBase = vec3(0.0, 0.2, 0.8) * 0.2;
+          vec3 inactiveBase = mix(vec3(0.0, 0.2, 0.8) * 0.2, vec3(0.8, 0.0, 0.2) * 0.3, overdrive);
           vec3 activeBase = vColor * 0.5;
           
-          vec3 inactivePulse = vec3(0.0, 0.6, 1.0);
+          vec3 inactivePulse = mix(vec3(0.0, 0.6, 1.0), vec3(1.0, 0.1, 0.4), overdrive);
           vec3 activePulse = mix(vColor, vec3(1.0), 0.5); // Bright pastel version of the region color
           
           vec3 base = mix(inactiveBase, activeBase, vIsActive);
           vec3 pulseColor = mix(inactivePulse, activePulse, vIsActive);
           
-          float speed = mix(1.0, 2.5, vIsActive); 
+          float speed = mix(1.0, 2.5, vIsActive) * (1.0 + overdrive * 1.5); 
           float sparkPos = fract(time * speed + vPathId * 0.453);
           
           float dist = abs(vUv - sparkPos);
@@ -274,10 +278,13 @@ export default function Brain3D({ activeNodes }: Brain3DProps) {
   useFrame((state) => {
     if (!linesRef.current || !coreRef.current) return;
     const time = state.clock.elapsedTime;
-    lnMat.uniforms.time.value = time;
     
-    const rotY = time * 0.15;
-    const rotX = Math.sin(time * 0.1) * 0.1;
+    lnMat.uniforms.time.value = time;
+    lnMat.uniforms.overdrive.value = overdrive ? 1.0 : 0.0;
+    coreMat.uniforms.overdrive.value = overdrive ? 1.0 : 0.0;
+    
+    const rotY = time * (overdrive ? 0.35 : 0.15);
+    const rotX = Math.sin(time * 0.1) * (overdrive ? 0.2 : 0.1);
     
     linesRef.current.rotation.set(rotX, rotY, 0);
     coreRef.current.rotation.set(rotX, rotY, 0);

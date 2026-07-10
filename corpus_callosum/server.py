@@ -26,6 +26,7 @@ class ChatRequest(BaseModel):
     editor_code:  str | None = None
     repo_url:     str | None = None
     mode:         str | None = "chat"   # chat | debug | architect | security
+    overdrive:    bool | None = False
 
 
 @app.get("/health")
@@ -94,6 +95,7 @@ async def chat(request: ChatRequest):
                 "editor_code":        request.editor_code or "",
                 "repo_code":          repo_code,
                 "mode":               request.mode or "chat",
+                "overdrive":          request.overdrive or False,
                 "messages":           [],
                 "context":            [],
                 "is_urgent":          False,

@@ -21,6 +21,14 @@ def prefrontal_node(state: AgentState) -> dict:
     parietal = state.get("parietal_out", "")
     temporal = state.get("temporal_out", "")
     mode = state.get("mode", "chat")
+    overdrive = state.get("overdrive", False)
+
+    overdrive_prompt = ""
+    if overdrive:
+        overdrive_prompt = """
+[HYPER-FOCUS OVERDRIVE ENABLED]
+Plan an EXTREMELY detailed, step-by-step architecture. Instruct Broca's area to write a fully functional, self-contained HTML/CSS/JS frontend application that can be run in an iframe sandbox. Do NOT plan for a backend. Focus purely on a stunning UI using vanilla web tech.
+"""
     
     sys_prompt = f"""You are the Prefrontal Cortex — the planning and executive decision-making center.
 You receive inputs from the other brain regions and produce a PLAN for the final response.
@@ -47,6 +55,7 @@ Based on all the above, produce a STRUCTURED PLAN (not the final answer):
 - What sections or steps it should include
 - What code should be written (if any)
 - The tone/depth to use (adjust for frustration level)
+{overdrive_prompt}
 
 This plan will be handed to Broca's Area for execution."""
     resp = llm.invoke([

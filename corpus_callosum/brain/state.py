@@ -15,6 +15,7 @@ class AgentState(TypedDict):
     editor_code:        str
     repo_code:          str
     mode:               str   # "chat" | "debug" | "architect" | "security"
+    overdrive:          bool  # Hyper-Focus flag
 
     # Memory
     messages:           Annotated[list[BaseMessage], add_messages]

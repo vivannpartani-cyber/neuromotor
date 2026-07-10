@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, Suspense, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Camera, AlertTriangle, GitBranch, Terminal, Building2, Shield, MessageSquare, Zap } from 'lucide-react';
+import { Send, Camera, AlertTriangle, GitBranch, Terminal, Building2, Shield, MessageSquare, Zap, Flame } from 'lucide-react';
 import Webcam from 'react-webcam';
 import * as faceapi from '@vladmandic/face-api';
 import { Canvas } from '@react-three/fiber';
@@ -71,6 +71,9 @@ export default function App() {
     id: '0', role: 'assistant',
     content: `## Neuromotor V12\n\nWelcome to the volumetric Neural Dev Brain. The AI routes your prompts through 8 anatomical lobes powered by Llama 3 and Qwen.\n\n**Select a mode above** and ask me anything. Watch your webcam—if you look frustrated, the Amygdala will auto-trigger a debug cycle!`,
   }]);
+
+  const [overdrive, setOverdrive] = useState(false);
+  const [sandboxCode, setSandboxCode] = useState<{html: string, css: string, js: string} | null>(null);
 
   const [input, setInput]         = useState('');
   const [repoUrl, setRepoUrl]     = useState('');
@@ -152,6 +155,7 @@ export default function App() {
         message: query,
         emotion_state: emotion,
         mode: runMode,
+        overdrive: overdrive,
       };
       if (runMode === 'security' && repoUrl) body.repo_url = repoUrl;
       if (input) body.editor_code = input;
@@ -182,6 +186,18 @@ export default function App() {
               setActiveLabel('');
               setStatusText('SYSTEM READY');
               setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: ev.response }]);
+              
+              const extractCode = (text: string, lang: string) => {
+                const regex = new RegExp(`\`\`\`${lang}\\n([\\s\\S]*?)\`\`\``, 'i');
+                const match = text.match(regex);
+                return match ? match[1] : '';
+              };
+              const html = extractCode(ev.response, 'html');
+              const css = extractCode(ev.response, 'css');
+              const js = extractCode(ev.response, 'javascript') || extractCode(ev.response, 'js');
+              if (html || css || js) {
+                setSandboxCode({ html, css, js });
+              }
             } else if (ev.node === 'error') {
               throw new Error(ev.error);
             } else if (ev.node === 'system') {
@@ -216,6 +232,30 @@ export default function App() {
   };
 
   const currentMode = MODES.find(m => m.id === mode)!;
+
+  const renderSandbox = () => {
+    if (!sandboxCode) return null;
+    const srcDoc = `
+      <html>
+        <head>
+          <style>${sandboxCode.css}</style>
+        </head>
+        <body>
+          ${sandboxCode.html}
+          <script>${sandboxCode.js}</script>
+        </body>
+      </html>
+    `;
+    return (
+      <div className="flex-1 flex flex-col bg-white">
+         <div className="p-3 border-b border-slate-200 flex justify-between items-center bg-slate-100 shrink-0">
+           <span className="text-[10px] font-bold text-slate-800 tracking-widest">LIVE PREVIEW</span>
+           <button onClick={() => setSandboxCode(null)} className="text-[10px] font-bold text-slate-500 hover:text-slate-800 bg-white border border-slate-300 px-2 py-0.5 rounded">CLOSE</button>
+         </div>
+         <iframe srcDoc={srcDoc} title="Live Preview" className="w-full flex-1 border-none" sandbox="allow-scripts" />
+      </div>
+    );
+  };
 
   return (
     <div className="flex h-screen bg-[#020617] text-slate-200 overflow-hidden font-sans">
@@ -339,7 +379,7 @@ export default function App() {
         <div className="flex-1">
           <Suspense fallback={<div className="h-full flex items-center justify-center text-[10px] text-slate-600 tracking-widest">BOOTING NEURAL ENGINE...</div>}>
             <Canvas camera={{ position: [0, 0, 5.5], fov: 50 }}>
-              <Brain3D activeNodes={activeNodes} nodeLabel={activeLabel} />
+              <Brain3D activeNodes={activeNodes} nodeLabel={activeLabel} overdrive={overdrive} />
             </Canvas>
           </Suspense>
         </div>
@@ -365,16 +405,29 @@ export default function App() {
         </div>
       </div>
 
-      {/* ── RIGHT: Mode context panel (30%) ────────────────────────────── */}
+      {/* ── RIGHT: Mode context panel / Sandbox (30%) ────────────────────────────── */}
       <div className="w-[30%] flex flex-col bg-[#0a0f1c]">
 
-        <div className="p-4 border-b border-slate-800/50 shrink-0">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-indigo-400">{currentMode.icon}</span>
-            <span className="text-[10px] font-bold tracking-widest text-slate-300 uppercase">{currentMode.label} Mode</span>
-          </div>
-          <p className="text-[10px] text-slate-500 leading-relaxed">{currentMode.hint}</p>
-          <div className="flex flex-wrap gap-1 mt-2">
+        {sandboxCode ? renderSandbox() : (
+          <>
+            <div className="p-4 border-b border-slate-800/50 shrink-0">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-indigo-400">{currentMode.icon}</span>
+                  <span className="text-[10px] font-bold tracking-widest text-slate-300 uppercase">{currentMode.label} Mode</span>
+                </div>
+                <button
+                  onClick={() => setOverdrive(!overdrive)}
+                  className={`flex items-center gap-1 px-2 py-1 rounded text-[8px] font-bold tracking-wider uppercase transition-colors border ${
+                    overdrive ? 'bg-rose-500/20 text-rose-400 border-rose-500/50' : 'bg-slate-800/50 text-slate-500 border-slate-700/50 hover:text-slate-300'
+                  }`}
+                >
+                  <Flame size={10} />
+                  Hyper-Focus
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-500 leading-relaxed">{currentMode.hint}</p>
+              <div className="flex flex-wrap gap-1 mt-3">
             {currentMode.regions.map(r => (
               <div key={r} className="flex items-center gap-1 bg-slate-800/50 px-1.5 py-0.5 rounded text-[8px] text-slate-400 font-mono">
                 <div className="w-1 h-1 rounded-full" style={{ backgroundColor: REGION_COLORS[r] || '#64748b' }} />
@@ -431,6 +484,8 @@ export default function App() {
             </p>
           </div>
         </div>
+        </>
+        )}
 
       </div>
     </div>
