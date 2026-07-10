@@ -150,7 +150,15 @@ async def chat(request: ChatRequest):
 
         except Exception as exc:
             traceback.print_exc()
-            yield f'data: {{"node": "error", "error": {json.dumps(str(exc))}}}\n\n'
+            err_str = str(exc)
+            # Detect Groq rate limit errors and give a friendly message
+            if "rate_limit_exceeded" in err_str or "Rate limit" in err_str or "tokens per day" in err_str:
+                friendly = "⚡ Groq free-tier daily token limit reached. The brain needs to rest! Try again in a few minutes, or upgrade your Groq plan at console.groq.com/settings/billing."
+            elif "model_decommissioned" in err_str:
+                friendly = "🔧 A model was retired by Groq mid-session. Restart the backend and try again."
+            else:
+                friendly = err_str
+            yield f'data: {{"node": "error", "error": {json.dumps(friendly)}}}\n\n'
 
     return StreamingResponse(
         generate(),
