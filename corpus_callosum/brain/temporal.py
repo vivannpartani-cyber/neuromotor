@@ -9,7 +9,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from brain.state import AgentState
 
 LLM = lambda: ChatOpenAI(
-    model="llama-3.3-70b-versatile",
+    model="mixtral-8x7b-32768",
     temperature=0,
     base_url="https://api.groq.com/openai/v1",
     api_key=os.getenv("GROQ_API_KEY")
