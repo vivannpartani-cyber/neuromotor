@@ -397,7 +397,7 @@ export default function App() {
                   />
                   <div>
                     <div className="text-[9px] font-bold" style={{ color: isActive ? color : '#64748b' }}>
-                      {MODES.flatMap(m => []).length >= 0 && (() => {
+                      {(() => {
                         const labels: Record<string, string> = {
                           amygdala: "Amygdala", hippocampus: "Hippocampus",
                           wernicke: "Wernicke's Area", parietal: "Parietal Lobe",

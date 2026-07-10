@@ -21,9 +21,9 @@ When you submit a request (or a GitHub repo), Neuromotor routes the data through
 Neuromotor is integrated with **[SuperCompress](https://supercompress.dev/)**. If you feed the brain a massive codebase (via the Security mode repository ingestion), SuperCompress intercepts the data and shrinks it down to its most critical logic *before* it hits the LLMs—saving hundreds of thousands of tokens without losing the plot.
 
 ## The Interface
-The frontend is a React + Three.js (React Three Fiber) application. The 3D brain model is composed of thousands of particles mapped to their actual anatomical locations. 
-- **Idle State:** The brain spins smoothly in a neon blue, displaying idle neural shimmering handled directly by GPU shaders for zero UI lag.
-- **Active State:** As the backend `server.py` streams Server-Sent Events (SSE) representing each lobe's activation, the corresponding anatomical region in the 3D model flares up with intense color and floating labels.
+The frontend is a React + Three.js (React Three Fiber) application. The 3D brain model is composed of a volumetric glass core surrounded by 1,500 glowing neural fiber pathways mapped mathematically to the folds (gyri and sulci) of actual brain anatomy.
+- **Idle State:** The brain spins smoothly with deep neon blue fibers shimmering subtly, processed entirely on the GPU via custom shaders for zero UI lag.
+- **Active State:** As the backend `server.py` streams Server-Sent Events (SSE) representing each lobe's activation, the corresponding anatomical fibers ignite with intense, fast-moving energy pulses in their respective colors (e.g., green for Temporal, pink for Broca's), accompanied by floating labels.
 
 ## Getting Started
 
