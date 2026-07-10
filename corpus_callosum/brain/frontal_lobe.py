@@ -8,7 +8,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from brain.state import AgentState
 
 def frontal_lobe_node(state: AgentState) -> dict:
-    llm = ChatOpenAI(model="openai/gpt-oss-120b", temperature=0, base_url="https://api.groq.com/openai/v1", api_key=os.getenv("GROQ_API_KEY"))
+    llm = ChatOpenAI(model="llama-3.3-70b-versatile", temperature=0, base_url="https://api.groq.com/openai/v1", api_key=os.getenv("GROQ_API_KEY"))
     
     sys_prompt = f"""You are the Frontal Lobe, the final Activation Function of this Neural Network Coding Agent.
 You receive parallel processed inputs from your Hidden Layers. Your job is to synthesize them into a single, flawless, comprehensive response for the user.

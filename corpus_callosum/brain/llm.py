@@ -1,13 +1,13 @@
 """
 Central LLM factory.
-Uses Groq's OpenAI-compatible endpoint so we can run openai/gpt-oss-120b
+Uses Groq's OpenAI-compatible endpoint so we can run llama-3.3-70b-versatile
 without needing a separate langchain-groq package.
 """
 import os
 from langchain_openai import ChatOpenAI
 
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
-GROQ_MODEL    = "openai/gpt-oss-120b"
+GROQ_MODEL    = "llama-3.3-70b-versatile"
 
 def get_llm(temperature: float = 0.0) -> ChatOpenAI:
     """Return a ChatOpenAI client wired to Groq's API."""

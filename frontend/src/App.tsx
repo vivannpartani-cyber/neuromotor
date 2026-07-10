@@ -23,7 +23,7 @@ interface Message {
 export default function App() {
   const [messages, setMessages] = useState<Message[]>([{
     id: '0', role: 'assistant', timestamp: new Date(),
-    content: `Neuromotor V8: Biometric Code Review Swarm.\n\nEnter a GitHub URL. The 3 parallel lobes will clone the repo and audit it simultaneously for syntax, logic, and security vulnerabilities.`,
+    content: `Welcome to Neuromotor — a parallel multi-agent coding system.\n\n🔵 CHAT (this pane): Ask me anything — write code, debug, explain a concept, refactor, generate scripts. I process your request through 3 parallel AI nodes (Syntax, Logic, Security) simultaneously.\n\n🟣 SWARM AUDIT (right pane): Paste a public GitHub repo URL and hit Initiate Audit to run a deep parallel code review across the entire codebase.\n\nYour facial emotion is also tracked — if you look frustrated for 4 seconds, I'll auto-trigger an emergency audit.`
   }]);
   
   const [input, setInput] = useState('');
@@ -32,8 +32,8 @@ export default function App() {
   const [statusText, setStatusText]  = useState('SYSTEM READY');
   
   // Swarm State
-  const [repoUrl, setRepoUrl] = useState('https://github.com/torvalds/linux');
-  const [reviewReport, setReviewReport] = useState('> Swarm is standing by. Enter a repository URL and initiate the audit.');
+  const [repoUrl, setRepoUrl] = useState('');
+  const [reviewReport, setReviewReport] = useState('');
 
   // Biometric State
   const webcamRef = useRef<Webcam>(null);
@@ -147,6 +147,9 @@ export default function App() {
               setStatusText('SYSTEM READY');
             } else if (event.node === 'error') {
               throw new Error(event.error);
+            } else if (event.node === 'system') {
+              // Show cloning progress in the report panel
+              setReviewReport(`> ${event.message || event.status}`);
             } else {
               currentActive.add(event.node);
               setActiveNodes(new Set(currentActive));
@@ -282,7 +285,19 @@ export default function App() {
         </div>
 
         <div className="flex-1 overflow-y-auto custom-scrollbar p-6 bg-[#0a0f1c] prose prose-invert prose-sm max-w-none">
-          <ReactMarkdown>{reviewReport}</ReactMarkdown>
+          {reviewReport ? (
+            <ReactMarkdown>{reviewReport}</ReactMarkdown>
+          ) : (
+            <div className="h-full flex flex-col items-center justify-center gap-3 text-center opacity-40">
+              <GitBranch size={32} className="text-slate-500" />
+              <p className="text-slate-500 text-xs leading-relaxed">
+                Paste a GitHub URL above and click<br/>
+                <span className="text-indigo-400 font-bold">INITIATE AUDIT</span> to launch the swarm.<br/><br/>
+                The 3 parallel lobes will simultaneously audit<br/>
+                syntax, logic, and security vulnerabilities.
+              </p>
+            </div>
+          )}
         </div>
 
       </div>

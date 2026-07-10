@@ -8,7 +8,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from brain.state import AgentState
 
 def syntax_node(state: AgentState) -> dict:
-    llm = ChatOpenAI(model="openai/gpt-oss-120b", temperature=0, base_url="https://api.groq.com/openai/v1", api_key=os.getenv("GROQ_API_KEY"))
+    llm = ChatOpenAI(model="llama-3.3-70b-versatile", temperature=0, base_url="https://api.groq.com/openai/v1", api_key=os.getenv("GROQ_API_KEY"))
     
     sys_prompt = f"""You are the Syntax Node. Focus ONLY on clean code architecture, readability, and idiomatic language patterns. Ignore algorithmic complexity and security. Provide your specific syntax recommendations concisely.
 
