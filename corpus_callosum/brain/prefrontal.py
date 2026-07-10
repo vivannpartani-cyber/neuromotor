@@ -24,6 +24,9 @@ def prefrontal_node(state: AgentState) -> dict:
     mode = state.get("mode", "chat")
     overdrive = state.get("overdrive", False)
 
+    if mode == "chat":
+        return {"prefrontal_out": "Prefrontal cortex bypassed in chat mode. Proceed to generate directly."}
+
     overdrive_prompt = ""
     if overdrive:
         overdrive_prompt = """

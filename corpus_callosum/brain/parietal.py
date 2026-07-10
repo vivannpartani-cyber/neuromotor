@@ -19,6 +19,11 @@ LLM = lambda: ChatOpenAI(
 def parietal_node(state: AgentState) -> dict:
     llm = LLM()
     code_context = state.get("editor_code") or state.get("repo_code") or ""
+    mode = state.get("mode", "chat")
+    
+    if mode == "chat":
+        return {"parietal_out": "Parietal lobe bypassed in chat mode."}
+    
     wernicke = state.get("wernicke_out", "")
     sys_prompt = f"""You are the Parietal Lobe — the spatial and logical reasoning center.
 Your job is to TRACE EXECUTION and FIND BUGS.
